@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Survey .mtx Random Filler</title>
+  <style>
+    :root { --bg:#0b1220; --fg:#e7ecf3; --muted:#9fb0c9; --accent:#7cacf8; --card:#121a2b; }
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial; background:var(--bg); color:var(--fg);}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
+    h1{font-size:1.4rem;margin:0 0 12px}
+    p{color:var(--muted);margin:.25rem 0 1rem}
+    .card{background:var(--card);border:1px solid #1e2a44;border-radius:16px;padding:16px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    .row{display:grid;gap:12px}
+    @media(min-width:900px){ .row{grid-template-columns:1.1fr .9fr} }
+    label{font-size:.9rem;color:var(--muted);display:block;margin-bottom:6px}
+    textarea{width:100%;min-height:360px;border-radius:12px;border:1px solid #24314e;background:#0f1626;color:var(--fg);padding:12px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92rem}
+    input[type=file]{display:block}
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    button{background:var(--accent);border:none;color:#0a0f1a;padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer}
+    button.secondary{background:#1f2d4b;color:var(--fg);border:1px solid #2c3c64}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .mini{font-size:.82rem;color:var(--muted)}
+    .kvs{display:grid;grid-template-columns:repeat(2,minmax(160px,1fr));gap:10px;margin-top:10px}
+    .kv{background:#0f1626;border:1px solid #24314e;border-radius:10px;padding:10px}
+    .kv code{color:#d0e3ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Survey .mtx Random Filler</h1>
+    <p>Upload your <code>.mtx</code> (JSON) file, then click <b>Process</b> to fill <code>measurementDate</code>, <code>measurementValue</code>, set <code>inRange</code> to <code>"0"</code>, and force fixed <code>surveyLatitude</code>/<code>surveyLongitude</code>. Then download the updated file.</p>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="in">Input (.mtx / JSON)</label>
+          <input id="file" type="file" accept=".mtx,.json,application/json,text/plain" />
+          <textarea id="in" placeholder="…or paste JSON here"></textarea>
+          <div class="btns">
+            <button id="process">Process</button>
+            <button id="download" class="secondary" disabled>Download .mtx</button>
+          </div>
+          <div class="mini">Note: Dates are randomized up to today in <code>YYYY-MM-DDTHH:mm:ss.SSSZ</code> format; measurement values are random numeric values.</div>
+        </div>
+        <div>
+          <label for="out">Output (preview)</label>
+          <textarea id="out" readonly placeholder="Processed JSON will appear here…"></textarea>
+          <div class="kvs">
+            <div class="kv"><div>Fixed Latitude</div><code id="latPrev">18.4014973</code></div>
+            <div class="kv"><div>Fixed Longitude</div><code id="lngPrev">76.2488651</code></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // CONFIG: start date for random date generation
+    const START_DATE = new Date('2015-01-01T00:00:00Z');
+    const FIXED_LAT = '18.4014973';
+    const FIXED_LNG = '76.2488651';
+
+    const elIn = document.getElementById('in');
+    const elOut = document.getElementById('out');
+    const elFile = document.getElementById('file');
+    const btnProcess = document.getElementById('process');
+    const btnDownload = document.getElementById('download');
+
+    elFile.addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const text = await f.text();
+      elIn.value = text;
+    });
+
+    btnProcess.addEventListener('click', () => {
+      try {
+        const raw = elIn.value.trim();
+        if (!raw) throw new Error('No input provided. Paste JSON or choose a file.');
+        const data = JSON.parse(raw);
+        const processed = deepProcess(structuredClone(data));
+        const pretty = JSON.stringify(processed, null, 2);
+        elOut.value = pretty;
+        btnDownload.disabled = false;
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    btnDownload.addEventListener('click', () => {
+      try {
+        const blob = new Blob([elOut.value], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = suggestName();
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      } catch (err) {
+        alert('Download failed: ' + err.message);
+      }
+    });
+
+    function suggestName(){
+      const f = elFile.files?.[0];
+      if (!f) return 'SurveyAsset_updated.mtx';
+      const n = f.name.replace(/\.json$/i, '.mtx');
+      const base = n.replace(/(\.mtx)$/i, '');
+      return base + '_updated.mtx';
+    }
+
+    function deepProcess(node){
+      if (Array.isArray(node)) {
+        return node.map(deepProcess);
+      } else if (node && typeof node === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(node)) {
+          let newVal = v;
+
+          if (k === 'inRange') newVal = "0"; // string instead of number
+          if (k === 'surveyLatitude') newVal = FIXED_LAT;
+          if (k === 'surveyLongitude') newVal = FIXED_LNG;
+
+          if (k === 'measurementDate') {
+            newVal = randomDateISO();
+          }
+
+          if (k === 'measurementValue') {
+            newVal = randomNumeric();
+          }
+
+          if (newVal && typeof newVal === 'object') {
+            out[k] = deepProcess(newVal);
+          } else {
+            out[k] = newVal;
+          }
+        }
+        return out;
+      }
+      return node;
+    }
+
+    function randomDateISO(){
+      const today = new Date();
+      const startMs = START_DATE.getTime();
+      const endMs = today.getTime();
+      const t = startMs + Math.floor(Math.random() * (endMs - startMs + 1));
+      const d = new Date(t);
+      return d.toISOString();
+    }
+
+    function randomNumeric(){
+      const isInt = Math.random() < 0.5;
+      if (isInt) return Math.floor(Math.random() * 1000);
+      const val = Math.random() * 1000;
+      return Math.round(val * 100) / 100;
+    }
+  </script>
+</body>
+</html>
