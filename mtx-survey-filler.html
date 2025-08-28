@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Survey .mtx Random Filler</title>
+  <title>Survey .mtx Processor</title>
   <style>
     :root { --bg:#0b1220; --fg:#e7ecf3; --muted:#9fb0c9; --accent:#7cacf8; --card:#121a2b; }
     html,body{height:100%}
@@ -17,7 +17,7 @@
     label{font-size:.9rem;color:var(--muted);display:block;margin-bottom:6px}
     textarea{width:100%;min-height:360px;border-radius:12px;border:1px solid #24314e;background:#0f1626;color:var(--fg);padding:12px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92rem}
     input[type=file]{display:block}
-    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .btns{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;align-items:center}
     button{background:var(--accent);border:none;color:#0a0f1a;padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer}
     button.secondary{background:#1f2d4b;color:var(--fg);border:1px solid #2c3c64}
     button:disabled{opacity:.55;cursor:not-allowed}
@@ -25,12 +25,13 @@
     .kvs{display:grid;grid-template-columns:repeat(2,minmax(160px,1fr));gap:10px;margin-top:10px}
     .kv{background:#0f1626;border:1px solid #24314e;border-radius:10px;padding:10px}
     .kv code{color:#d0e3ff}
+    input[type=number]{width:60px;padding:8px;border-radius:8px;border:1px solid #24314e;background:#0f1626;color:var(--fg);font-weight:600;}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Survey .mtx Random Filler</h1>
-    <p>Upload your <code>.mtx</code> (JSON) file, then click <b>Process</b> to fill <code>measurementDate</code>, <code>measurementValue</code>, set <code>inRange</code> to <code>"0"</code>, and force fixed <code>surveyLatitude</code>/<code>surveyLongitude</code>. Then download the updated file.</p>
+    <h1>Survey .mtx Processor</h1>
+    <p>Upload your <code>.mtx</code> (JSON) file. You can process existing assets and/or add new ones. Then download the updated file.</p>
 
     <div class="card">
       <div class="row">
@@ -40,6 +41,10 @@
           <textarea id="in" placeholder="…or paste JSON here"></textarea>
           <div class="btns">
             <button id="process">Process</button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label for="numAssets" class="mini">Assets to add:</label>
+              <input id="numAssets" type="number" min="0" value="0" title="Number of new assets to add to the end of the file">
+            </div>
             <button id="download" class="secondary" disabled>Download .mtx</button>
           </div>
           <div class="mini">Note: Dates are randomized up to today in <code>YYYY-MM-DDTHH:mm:ss.SSSZ</code> format; measurement values are random numeric values.</div>
@@ -67,6 +72,7 @@
     const elFile = document.getElementById('file');
     const btnProcess = document.getElementById('process');
     const btnDownload = document.getElementById('download');
+    const elNumAssets = document.getElementById('numAssets'); // New element
 
     elFile.addEventListener('change', async (e) => {
       const f = e.target.files?.[0];
@@ -80,7 +86,25 @@
         const raw = elIn.value.trim();
         if (!raw) throw new Error('No input provided. Paste JSON or choose a file.');
         const data = JSON.parse(raw);
+        
+        // 1. Process existing data
         const processed = deepProcess(structuredClone(data));
+
+        // 2. Add new assets if requested
+        const numAssetsToAdd = parseInt(elNumAssets.value, 10) || 0;
+        if (numAssetsToAdd > 0) {
+            if (processed.assets && Array.isArray(processed.assets)) {
+                const originalSurveyId = data.surveyId || "UNKNOWN_SURVEY_ID";
+                for (let i = 0; i < numAssetsToAdd; i++) {
+                    const newAsset = createNewAsset(i, originalSurveyId, processed.assets.length);
+                    processed.assets.push(newAsset);
+                }
+            } else {
+                alert("Could not find a top-level 'assets' array in the JSON to add new assets to.");
+            }
+        }
+        
+        // 3. Display output
         const pretty = JSON.stringify(processed, null, 2);
         elOut.value = pretty;
         btnDownload.disabled = false;
@@ -103,6 +127,76 @@
         alert('Download failed: ' + err.message);
       }
     });
+    
+    function createNewAsset(index, surveyId, currentAssetCount) {
+        const timestamp = Date.now();
+        const newAssetId = `NEW_ASSET_${timestamp}_${index}`;
+        const newCriteriaId = `NEW_CRITERIA_${newAssetId}_0`;
+
+        return {
+            "effectiveDate": new Date().toISOString(),
+            "creationDate": new Date().toISOString().split('T')[0],
+            "rootCause": [],
+            "inRangeValue": null,
+            "comments": "",
+            "editedDate": null,
+            "level4Value": null,
+            "level4Type": null,
+            "level3ValueId": null,
+            "whetherInRange": 0,
+            "locationDescription": null,
+            "level3Value": null,
+            "completed": null,
+            "assetType": "Galvanic Anode",
+            "surveyLatitude": "18.401511",
+            "level2ValueId": null,
+            "level2Value": null,
+            "pk": "",
+            "surveyLongitude": "76.2489493",
+            "level1Value": null,
+            "assetId": newAssetId,
+            "order": currentAssetCount + index + 1,
+            "latitude": "72",
+            "sk": "",
+            "level4ValueId": null,
+            "inRange": "0",
+            "longitude": "18",
+            "assetTypeId": null,
+            "surveyId": surveyId,
+            "milestone": "98",
+            "level1ValueId": null,
+            "assetName": `Test ${timestamp}`, // Using timestamp for uniqueness
+            "imageUrls": [],
+            "imageData": [],
+            "assetMeasurementCriterias": [{
+                "pk": "",
+                "sk": "",
+                "assetMeasurementCriteriaId": newCriteriaId,
+                "compliance": false,
+                "threshold": "",
+                "level4Relation": "",
+                "level4Type": "",
+                "level4Value": "",
+                "level4ValueId": "",
+                "measurementSource": "Primary",
+                "measurementType": "P/S ON DC",
+                "measurementOperator": "",
+                "unit": "V",
+                "acDcValue": "DC",
+                "measurementDate": new Date().toISOString(),
+                "measurementValue": 0.225,
+                "measurementImageUploaded": [],
+                "onCycle": 1,
+                "isRecorded": 1,
+                "associatedMetadata": [],
+                "historicalData": [],
+                "shouldCaptureValueOfOutputCurrentFound": 2,
+                "measurementOrder": 1
+            }],
+            "imageUploaded": [],
+            "audioUploaded": []
+        };
+    }
 
     function suggestName(){
       const f = elFile.files?.[0];
