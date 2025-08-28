@@ -72,7 +72,7 @@
     const elFile = document.getElementById('file');
     const btnProcess = document.getElementById('process');
     const btnDownload = document.getElementById('download');
-    const elNumAssets = document.getElementById('numAssets'); // New element
+    const elNumAssets = document.getElementById('numAssets');
 
     elFile.addEventListener('change', async (e) => {
       const f = e.target.files?.[0];
@@ -87,10 +87,8 @@
         if (!raw) throw new Error('No input provided. Paste JSON or choose a file.');
         const data = JSON.parse(raw);
         
-        // 1. Process existing data
         const processed = deepProcess(structuredClone(data));
 
-        // 2. Add new assets if requested
         const numAssetsToAdd = parseInt(elNumAssets.value, 10) || 0;
         if (numAssetsToAdd > 0) {
             if (processed.assets && Array.isArray(processed.assets)) {
@@ -104,8 +102,21 @@
             }
         }
         
-        // 3. Display output
-        const pretty = JSON.stringify(processed, null, 2);
+        let pretty = JSON.stringify(processed, null, 2);
+
+        // =================================================================
+        // NEW: Post-process the string to fix special formatting
+        // =================================================================
+        pretty = pretty.split('\n').map(line => {
+            if (line.trim().startsWith('"level4Value":')) {
+                // In this specific line, revert the characters to the original format.
+                // Replace \" with \u0022 and + with \u002B
+                line = line.replace(/\\"/g, '\\u0022').replace(/\+/g, '\\u002B');
+            }
+            return line;
+        }).join('\n');
+        // =================================================================
+
         elOut.value = pretty;
         btnDownload.disabled = false;
       } catch (err) {
@@ -165,7 +176,7 @@
             "surveyId": surveyId,
             "milestone": "98",
             "level1ValueId": null,
-            "assetName": `Test ${timestamp}`, // Using timestamp for uniqueness
+            "assetName": `Test ${timestamp}`,
             "imageUrls": [],
             "imageData": [],
             "assetMeasurementCriterias": [{
@@ -214,7 +225,7 @@
         for (const [k, v] of Object.entries(node)) {
           let newVal = v;
 
-          if (k === 'inRange') newVal = "0"; // string instead of number
+          if (k === 'inRange') newVal = "0";
           if (k === 'surveyLatitude') newVal = FIXED_LAT;
           if (k === 'surveyLongitude') newVal = FIXED_LNG;
 
