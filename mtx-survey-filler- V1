@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Survey .mtx Processor</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --fg: #e7ecf3;
+            --muted: #9fb0c9;
+            --accent: #7cacf8;
+            --card: #121a2b;
+        }
+
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial;
+            background: var(--bg);
+            color: var(--fg);
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 16px
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            margin: 0 0 12px
+        }
+
+        p {
+            color: var(--muted);
+            margin: .25rem 0 1rem
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid #1e2a44;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, .25)
+        }
+
+        .row {
+            display: grid;
+            gap: 12px
+        }
+
+        @media(min-width:900px) {
+            .row {
+                grid-template-columns: 1.1fr .9fr
+            }
+        }
+
+        label {
+            font-size: .9rem;
+            color: var(--muted);
+            display: block;
+            margin-bottom: 6px
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 360px;
+            border-radius: 12px;
+            border: 1px solid #24314e;
+            background: #0f1626;
+            color: var(--fg);
+            padding: 12px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: .92rem
+        }
+
+        input[type=file] {
+            display: block
+        }
+
+        .btns {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            align-items: center
+        }
+
+        button {
+            background: var(--accent);
+            border: none;
+            color: #0a0f1a;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer
+        }
+
+        button.secondary {
+            background: #1f2d4b;
+            color: var(--fg);
+            border: 1px solid #2c3c64
+        }
+
+        button:disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+        .mini {
+            font-size: .82rem;
+            color: var(--muted)
+        }
+
+        .kvs {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(160px, 1fr));
+            gap: 10px;
+            margin-top: 10px
+        }
+
+        .kv {
+            background: #0f1626;
+            border: 1px solid #24314e;
+            border-radius: 10px;
+            padding: 10px
+        }
+
+        .kv code {
+            color: #d0e3ff
+        }
+
+        input[type=number] {
+            width: 60px;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #24314e;
+            background: #0f1626;
+            color: var(--fg);
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h1>Survey .mtx Processor</h1>
+        <p>Upload your <code>.mtx</code> (JSON) file. You can process existing assets and/or add new ones. Then download
+            the updated file.</p>
+        <div class="card">
+            <div class="row">
+                <div>
+                    <label for="in">Input (.mtx / JSON)</label>
+                    <input id="file" type="file" accept=".mtx,.json,application/json,text/plain" />
+                    <textarea id="in" placeholder="…or paste JSON here"></textarea>
+                    <div class="btns">
+                        <button id="process">Process</button>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="numAssets" class="mini">Assets to add:</label>
+                            <input id="numAssets" type="number" min="0" value="0"
+                                title="Number of new assets to add to the end of the file">
+                        </div>
+                        <button id="download" class="secondary" disabled>Download .mtx</button>
+                    </div>
+                    <div class="mini">Note: Dates are randomized up to today in
+                        <code>YYYY-MM-DDTHH:mm:ss.SSSZ</code> format; measurement values are random numeric values.
+                    </div>
+                </div>
+                <div>
+                    <label for="out">Output (preview)</label>
+                    <textarea id="out" readonly placeholder="Processed JSON will appear here…"></textarea>
+                    <div class="kvs">
+                        <div class="kv">
+                            <div>Fixed Latitude</div>
+                            <code id="latPrev">18.4014973</code>
+                        </div>
+                        <div class="kv">
+                            <div>Fixed Longitude</div>
+                            <code id="lngPrev">76.2488651</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // CONFIG: start date for random date generation
+        const START_DATE = new Date('2015-01-01T00:00:00Z');
+        const FIXED_LAT = '18.4014973';
+        const FIXED_LNG = '76.2488651';
+
+        const elIn = document.getElementById('in');
+        const elOut = document.getElementById('out');
+        const elFile = document.getElementById('file');
+        const btnProcess = document.getElementById('process');
+        const btnDownload = document.getElementById('download');
+        const elNumAssets = document.getElementById('numAssets');
+
+        elFile.addEventListener('change', async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const text = await f.text();
+            elIn.value = text;
+        });
+
+        btnProcess.addEventListener('click', () => {
+            try {
+                const raw = elIn.value.trim();
+                if (!raw) throw new Error('No input provided. Paste JSON or choose a file.');
+                const data = JSON.parse(raw);
+                const processed = deepProcess(structuredClone(data));
+
+                const numAssetsToAdd = parseInt(elNumAssets.value, 10) || 0;
+                if (numAssetsToAdd > 0) {
+                    if (processed.assets && Array.isArray(processed.assets)) {
+                        const originalSurveyId = data.surveyId || "UNKNOWN_SURVEY_ID";
+                        for (let i = 0; i < numAssetsToAdd; i++) {
+                            const newAsset = createNewAsset(i, originalSurveyId, processed.assets.length);
+                            processed.assets.push(newAsset);
+                        }
+                    } else {
+                        alert("Could not find a top-level 'assets' array in the JSON to add new assets to.");
+                    }
+                }
+
+                let pretty = JSON.stringify(processed, null, 2);
+
+                // =================================================================
+                // NEW: Post-process the string to fix special formatting
+                // =================================================================
+                pretty = pretty.split('\n').map(line => {
+                    if (line.trim().startsWith('"level4Value":')) {
+                        // In this specific line, revert the characters to the original format.
+                        // Replace \" with \u0022 and + with \u002B
+                        line = line.replace(/\\"/g, '\\u0022').replace(/\+/g, '\\u002B');
+                    }
+                    return line;
+                }).join('\n');
+                // =================================================================
+
+                elOut.value = pretty;
+                btnDownload.disabled = false;
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        });
+
+        btnDownload.addEventListener('click', () => {
+            try {
+                const blob = new Blob([elOut.value], {
+                    type: 'application/json'
+                });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = suggestName();
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            } catch (err) {
+                alert('Download failed: ' + err.message);
+            }
+        });
+
+        function createNewAsset(index, surveyId, currentAssetCount) {
+            const timestamp = Date.now();
+            const newAssetId = `NEW_ASSET_${timestamp}_${index}`;
+            const newCriteriaId = `NEW_CRITERIA_${newAssetId}_0`;
+
+            // Generating random spatial references for the new asset
+            const newSpatialReference1 = getRandomSpatialReference1();
+            const newSpatialReference2 = getRandomSpatialReference2();
+            const newSpatialReference3 = generateRandomAlphanumeric(8);
+
+            return {
+                "effectiveDate": new Date().toISOString(),
+                "creationDate": new Date().toISOString().split('T')[0],
+                "rootCause": [],
+                "inRangeValue": null,
+                "comments": "",
+                "editedDate": null,
+                "level4Value": null,
+                "level4Type": null,
+                "level3ValueId": null,
+                "whetherInRange": 0,
+                "locationDescription": null,
+                "level3Value": null,
+                "completed": null,
+                "assetType": "Galvanic Anode",
+                "surveyLatitude": "18.401511",
+                "level2ValueId": null,
+                "level2Value": null,
+                "pk": "",
+                "surveyLongitude": "76.2489493",
+                "level1Value": null,
+                "assetId": newAssetId,
+                "order": currentAssetCount + index + 1,
+                "latitude": "72",
+                "sk": "",
+                "level4ValueId": null,
+                "inRange": "0",
+                "longitude": "18",
+                "assetTypeId": null,
+                "surveyId": surveyId,
+                "milestone": "98",
+                "level1ValueId": null,
+                "assetName": `Test ${timestamp}`,
+                "spatialReference1": newSpatialReference1,
+                "spatialReference2": newSpatialReference2,
+                "spatialReference3": newSpatialReference3,
+                "imageUrls": [],
+                "imageData": [],
+                "assetMeasurementCriterias": [{
+                    "pk": "",
+                    "sk": "",
+                    "assetMeasurementCriteriaId": newCriteriaId,
+                    "compliance": false,
+                    "threshold": "",
+                    "level4Relation": "",
+                    "level4Type": "",
+                    "level4Value": "",
+                    "level4ValueId": "",
+                    "measurementSource": "Primary",
+                    "measurementType": "P/S ON DC",
+                    "measurementOperator": "",
+                    "unit": "V",
+                    "acDcValue": "DC",
+                    "measurementDate": new Date().toISOString(),
+                    "measurementValue": 0.225,
+                    "measurementImageUploaded": [],
+                    "onCycle": 1,
+                    "isRecorded": 1,
+                    "associatedMetadata": [],
+                    "historicalData": [],
+                    "shouldCaptureValueOfOutputCurrentFound": 2,
+                    "measurementOrder": 1
+                }],
+                "imageUploaded": [],
+                "audioUploaded": []
+            };
+        }
+
+        function suggestName() {
+            const f = elFile.files?.[0];
+            if (!f) return 'SurveyAsset_updated.mtx';
+            const n = f.name.replace(/\.json$/i, '.mtx');
+            const base = n.replace(/(\.mtx)$/i, '');
+            return base + '_updated.mtx';
+        }
+
+        function deepProcess(node) {
+            if (Array.isArray(node)) {
+                return node.map(deepProcess);
+            } else if (node && typeof node === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(node)) {
+                    let newVal = v;
+
+                    if (k === 'inRange') newVal = "0";
+                    if (k === 'surveyLatitude') newVal = FIXED_LAT;
+                    if (k === 'surveyLongitude') newVal = FIXED_LNG;
+
+                    if (k === 'spatialReference1') {
+                        // SR1 is a decimal with 3 digits after the decimal point
+                        newVal = getRandomSpatialReference1();
+                    }
+
+                    if (k === 'spatialReference2') {
+                        // SR2 is a whole number
+                        newVal = getRandomSpatialReference2();
+                    }
+
+                    if (k === 'spatialReference3') {
+                        // SR3 is a random alphanumeric string
+                        newVal = generateRandomAlphanumeric(8);
+                    }
+
+                    if (k === 'measurementDate') {
+                        newVal = randomDateISO();
+                    }
+
+                    if (k === 'measurementValue') {
+                        newVal = randomNumeric();
+                    }
+
+                    if (newVal && typeof newVal === 'object') {
+                        out[k] = deepProcess(newVal);
+                    } else {
+                        out[k] = newVal;
+                    }
+                }
+                return out;
+            }
+            return node;
+        }
+
+        // --- New functions for spatial references ---
+
+        function getRandomSpatialReference1() {
+            const num = Math.random() * 100;
+            return num.toFixed(3);
+        }
+
+        function getRandomSpatialReference2() {
+            return Math.floor(Math.random() * 100);
+        }
+
+        function generateRandomAlphanumeric(length) {
+            let result = '';
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            const charactersLength = characters.length;
+            for (let i = 0; i < length; i++) {
+                result += characters.charAt(Math.floor(Math.random() * charactersLength));
+            }
+            return result;
+        }
+
+        // --- Existing functions for dates and numerics ---
+
+        function randomDateISO() {
+            const today = new Date();
+            const startMs = START_DATE.getTime();
+            const endMs = today.getTime();
+            const t = startMs + Math.floor(Math.random() * (endMs - startMs + 1));
+            const d = new Date(t);
+            return d.toISOString();
+        }
+
+        function randomNumeric() {
+            const isInt = Math.random() < 0.5;
+            if (isInt) return Math.floor(Math.random() * 1000);
+            const val = Math.random() * 1000;
+            return Math.round(val * 100) / 100;
+        }
+    </script>
+</body>
+
+</html>
