@@ -8,47 +8,47 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
 <style>
-  html, body { height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-  .container { max-width: 900px; margin: 20px auto; padding: 10px; }
-  h2, h3 { color: #2c3e50; }
-  label { display: block; margin-top: 15px; font-weight: bold; }
-  input[type="file"] { margin-top: 5px; }
-  .btn { margin-top: 10px; padding: 8px 12px; background-color: #3498db; color: white; border: none; cursor: pointer; margin-right: 5px; }
-  .btn:hover { background-color: #2980b9; }
-  .download-link { display: none; margin-top: 15px; }
-  #map { width: 100%; height: 400px; margin-top: 20px; border: 1px solid #ccc; }
-  th, td { border: 1px solid black; padding: 5px; text-align: center; }
-  .inline { display: inline-block; margin-right: 10px; }
-  .help { color: #666; font-weight: normal; font-size: 12px; }
-  .preview-container { margin-top: 20px; max-height: 250px; overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; }
-  .preview-container table { border-collapse: collapse; min-width: max-content; }
+  html, body { height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  .container { max-width: 900px; margin: 20px auto; padding: 10px; }
+  h2, h3 { color: #2c3e50; }
+  label { display: block; margin-top: 15px; font-weight: bold; }
+  input[type="file"] { margin-top: 5px; }
+  .btn { margin-top: 10px; padding: 8px 12px; background-color: #3498db; color: white; border: none; cursor: pointer; margin-right: 5px; }
+  .btn:hover { background-color: #2980b9; }
+  .download-link { display: none; margin-top: 15px; }
+  #map { width: 100%; height: 400px; margin-top: 20px; border: 1px solid #ccc; }
+  th, td { border: 1px solid black; padding: 5px; text-align: center; }
+  .inline { display: inline-block; margin-right: 10px; }
+  .help { color: #666; font-weight: normal; font-size: 12px; }
+  .preview-container { margin-top: 20px; max-height: 250px; overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; }
+  .preview-container table { border-collapse: collapse; min-width: max-content; }
 </style>
 </head>
 <body>
 <div class="container">
-  <h2>Pipeline Asset Import Tool</h2>
-  <form id="assetForm">
-    <label for="assetFile">Upload Reference File (.xlsx):</label>
-    <input type="file" id="assetFile" accept=".xlsx" required />
-    
-    <label for="assetSpacing">Distance between assets (km) <span class="help">(min 0.1 km)</span></label>
-    <input type="number" id="assetSpacing" class="inline" min="0.1" step="0.1" value="0.5" required inputmode="decimal" />
+  <h2>Pipeline Asset Import Tool</h2>
+  <form id="assetForm">
+    <label for="assetFile">Upload Reference File (.xlsx):</label>
+    <input type="file" id="assetFile" accept=".xlsx" required />
+    
+    <label for="assetSpacing">Distance between assets (km) <span class="help">(min 0.1 km)</span></label>
+    <input type="number" id="assetSpacing" class="inline" min="0.1" step="0.1" value="0.5" required inputmode="decimal" />
 
-    <button type="submit" class="btn">Generate Asset Records</button>
-  </form>
+    <button type="submit" class="btn">Generate Asset Records</button>
+  </form>
 
-  <button class="btn" onclick="locateMe()">Locate Me</button>
-  <button class="btn" onclick="startDrawingLine()">Draw Pipeline Line</button>
-  <button class="btn" onclick="clearPoints()">Clear All Points</button>
+  <button class="btn" onclick="locateMe()">Locate Me</button>
+  <button class="btn" onclick="startDrawingLine()">Draw Pipeline Line</button>
+  <button class="btn" onclick="clearPoints()">Clear All Points</button>
 
-  <div id="map"></div>
+  <div id="map"></div>
 
-  <h3>Generated File Preview (First 10 Rows)</h3>
-  <div class="preview-container">
-    <table id="previewTable"></table>
-  </div>
+  <h3>Generated File Preview (First 10 Rows)</h3>
+  <div class="preview-container">
+    <table id="previewTable"></table>
+  </div>
 
-  <a id="downloadLink" class="btn download-link">Download Generated File</a>
+  <a id="downloadLink" class="btn download-link">Download Generated File</a>
 </div>
 
 <script>
@@ -57,171 +57,174 @@ const areas = ["of the plant","of the control room","near the generator","next t
 const criteriaSequence = [">100 mV shift", ">300 mV shift", "More negative than -850 mV"];
 
 function getRandomLocationDescription(){
-  return `${directions[Math.floor(Math.random()*directions.length)]} ${areas[Math.floor(Math.random()*areas.length)]}`;
+  return `${directions[Math.floor(Math.random()*directions.length)]} ${areas[Math.floor(Math.random()*areas.length)]}`;
 }
 function generateUniqueAssetName(prefix,index){
-  return `${prefix}-${String(index+1).padStart(4,'0')}`;
+  return `${prefix}-${String(index+1).padStart(4,'0')}`;
 }
 function formatDate(date){
-  return `${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}/${date.getFullYear()}`;
+  return `${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}/${date.getFullYear()}`;
 }
 function generateFacilityShot(){
-  const words=[], numWords=1+Math.floor(Math.random()*3);
-  for(let i=0;i<numWords;i++){
-    if(i%2===0){
-      let letters='', len=2+Math.floor(Math.random()*3);
-      for(let j=0;j<len;j++) letters+=String.fromCharCode(65+Math.floor(Math.random()*26));
-      words.push(letters);
-    } else words.push(String(Math.floor(Math.random()*100)));
-  }
-  return words.join(' ');
+  const words=[], numWords=1+Math.floor(Math.random()*3);
+  for(let i=0;i<numWords;i++){
+    if(i%2===0){
+      let letters='', len=2+Math.floor(Math.random()*3);
+      for(let j=0;j<len;j++) letters+=String.fromCharCode(65+Math.floor(Math.random()*26));
+      words.push(letters);
+    } else words.push(String(Math.floor(Math.random()*100)));
+  }
+  return words.join(' ');
 }
 function generateAlphanumericName(){
-  const words=["Alpha","Beta","Gamma","Delta","Omega","Sigma"];
-  return `${words[Math.floor(Math.random()*words.length)]} ${Math.floor(Math.random()*100)}`;
+  const words=["Alpha","Beta","Gamma","Delta","Omega","Sigma"];
+  return `${words[Math.floor(Math.random()*words.length)]} ${Math.floor(Math.random()*100)}`;
 }
 
 const inspectionPoints=[];
 let drawInteraction, drawLayer, map, vectorSource;
 
 window.onload=()=>{
-  requestAnimationFrame(()=>{
-    map=new ol.Map({target:'map', layers:[new ol.layer.Tile({source:new ol.source.OSM()})], view:new ol.View({center:ol.proj.fromLonLat([-80,25]), zoom:6})});
-    vectorSource=new ol.source.Vector();
-    map.addLayer(new ol.layer.Vector({source:vectorSource}));
-    setTimeout(()=>map.updateSize(),0);
-  });
+  requestAnimationFrame(()=>{
+    map=new ol.Map({target:'map', layers:[new ol.layer.Tile({source:new ol.source.OSM()})], view:new ol.View({center:ol.proj.fromLonLat([-80,25]), zoom:6})});
+    vectorSource=new ol.source.Vector();
+    map.addLayer(new ol.layer.Vector({source:vectorSource}));
+    setTimeout(()=>map.updateSize(),0);
+  });
 };
 
 function addInspectionPointMarker(lat,lng){
-  const feature=new ol.Feature({geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat]))});
-  feature.setStyle(new ol.style.Style({image:new ol.style.Circle({radius:4,fill:new ol.style.Fill({color:'green'})})}));
-  vectorSource.addFeature(feature);
+  const feature=new ol.Feature({geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat]))});
+  feature.setStyle(new ol.style.Style({image:new ol.style.Circle({radius:4,fill:new ol.style.Fill({color:'green'})})}));
+  vectorSource.addFeature(feature);
 }
 function locateMe(){
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const lat=pos.coords.latitude,lng=pos.coords.longitude;
-    map.getView().animate({center:ol.proj.fromLonLat([lng,lat]),zoom:14});
-  });
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude,lng=pos.coords.longitude;
+    map.getView().animate({center:ol.proj.fromLonLat([lng,lat]),zoom:14});
+  });
 }
 function clearPoints(){
-  vectorSource.clear();
-  inspectionPoints.length=0;
-  if(drawInteraction) map.removeInteraction(drawInteraction);
-  if(drawLayer) map.removeLayer(drawLayer);
+  vectorSource.clear();
+  inspectionPoints.length=0;
+  if(drawInteraction) map.removeInteraction(drawInteraction);
+  if(drawLayer) map.removeLayer(drawLayer);
 }
 
 function startDrawingLine(){
-  clearPoints();
-  const drawSource=new ol.source.Vector({wrapX:false});
-  drawLayer=new ol.layer.Vector({
-    source:drawSource,
-    style:new ol.style.Style({stroke:new ol.style.Stroke({color:'#ff0000',width:2})})
-  });
-  map.addLayer(drawLayer);
+  clearPoints();
+  const drawSource=new ol.source.Vector({wrapX:false});
+  drawLayer=new ol.layer.Vector({
+    source:drawSource,
+    style:new ol.style.Style({stroke:new ol.style.Stroke({color:'#ff0000',width:2})})
+  });
+  map.addLayer(drawLayer);
 
-  drawInteraction=new ol.interaction.Draw({source:drawSource,type:'LineString'});
-  map.addInteraction(drawInteraction);
+  drawInteraction=new ol.interaction.Draw({source:drawSource,type:'LineString'});
+  map.addInteraction(drawInteraction);
 
-  drawInteraction.on('drawend',(event)=>{
-    const geometry=event.feature.getGeometry();
-    map.removeInteraction(drawInteraction);
-    const spacingKm=parseFloat(document.getElementById("assetSpacing").value) || 0.5;
-    generatePointsAlongLine(geometry, spacingKm);
-  });
+  drawInteraction.on('drawend',(event)=>{
+    const geometry=event.feature.getGeometry();
+    map.removeInteraction(drawInteraction);
+    const spacingKm=parseFloat(document.getElementById("assetSpacing").value) || 0.5;
+    generatePointsAlongLine(geometry, spacingKm);
+  });
 }
 
 function generatePointsAlongLine(lineGeometry, spacingKm){
-  inspectionPoints.length=0; vectorSource.clear();
-  const lineCoords=lineGeometry.getCoordinates();
-  const line=new ol.geom.LineString(lineCoords);
-  const spacingM=spacingKm*1000;
-  const length=ol.sphere.getLength(line);
+  inspectionPoints.length=0; vectorSource.clear();
+  const lineCoords=lineGeometry.getCoordinates();
+  const line=new ol.geom.LineString(lineCoords);
+  const spacingM=spacingKm*1000;
+  const length=ol.sphere.getLength(line);
 
-  for(let dist=0; dist<=length; dist+=spacingM){
-    const coord=line.getCoordinateAt(dist/length);
-    const lonLat=ol.proj.toLonLat(coord);
-    addInspectionPointMarker(lonLat[1],lonLat[0]);
-    inspectionPoints.push({ latitude:lonLat[1].toFixed(6), longitude:lonLat[0].toFixed(6) });
-  }
+  for(let dist=0; dist<=length; dist+=spacingM){
+    const coord=line.getCoordinateAt(dist/length);
+    const lonLat=ol.proj.toLonLat(coord);
+    addInspectionPointMarker(lonLat[1],lonLat[0]);
+    inspectionPoints.push({ latitude:lonLat[1].toFixed(6), longitude:lonLat[0].toFixed(6) });
+  }
 }
 
 function showPreviewTable(headers,data){
-  const table=document.getElementById("previewTable");
-  let html="<thead><tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr></thead><tbody>";
-  data.forEach(row=>{
-    html+="<tr>"+row.map(cell=>`<td>${cell}</td>`).join("")+"</tr>";
-  });
-  html+="</tbody>";
-  table.innerHTML=html;
+  const table=document.getElementById("previewTable");
+  let html="<thead><tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr></thead><tbody>";
+  data.forEach(row=>{
+    html+="<tr>"+row.map(cell=>`<td>${cell}</td>`).join("")+"</tr>";
+  });
+  html+="</tbody>";
+  table.innerHTML=html;
 }
 
 document.getElementById("assetForm").addEventListener("submit",function(e){
-  e.preventDefault();
-  const fileInput=document.getElementById("assetFile");
-  if(!fileInput.files.length) return alert("Please select a file.");
-  if(inspectionPoints.length===0) return alert("Please draw a pipeline line first.");
+  e.preventDefault();
+  const fileInput=document.getElementById("assetFile");
+  if(!fileInput.files.length) return alert("Please select a file.");
+  if(inspectionPoints.length===0) return alert("Please draw a pipeline line first.");
 
-  const reader=new FileReader();
-  reader.onload=function(event){
-    const workbook=XLSX.read(event.target.result,{type:'binary'});
-    const sheet=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]],{header:1});
-    const header=sheet[0];
-    const dataRows=[];
-    const today=new Date();
-    const operators=["equals","more negative than","More positive than", "greater than","less than", "equals and more positive than", "equals and more negative than" ];
-    const assetType=fileInput.files[0].name.split(" ")[0];
-    const latitudeIndex = header.findIndex(h=>/Latitude\*/i.test(h));
-    const mappingIndex = header.findIndex(h=>/Mapping Asset ID/i.test(h));
+  const reader=new FileReader();
+  reader.onload=function(event){
+    const workbook=XLSX.read(event.target.result,{type:'binary'});
+    const sheet=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]],{header:1});
+    const header=sheet[0];
+    const dataRows=[];
+    const today=new Date();
+    const operators=["equals","more negative than","More positive than", "greater than","less than", "equals and more positive than", "equals and more negative than" ];
+    const assetType=fileInput.files[0].name.split(" ")[0];
+    const latitudeIndex = header.findIndex(h=>/Latitude\*/i.test(h));
+    const mappingIndex = header.findIndex(h=>/Mapping Asset ID/i.test(h));
 
-    for(let i=0;i<inspectionPoints.length;i++){
-      const row=header.map((col,colIndex)=>{
-        if (col==="Stationing") return Math.floor(Math.random()*10000)+1;
-        if (col==="Facility Shot #") return generateFacilityShot();
-        if (/Region/i.test(col)) return "Region"+(i%3);
-        if (/Segment\*/i.test(col)) return "S"+String(i%10).padStart(3,'0');
-        if (/Segment Type\*/i.test(col)) return ["Mainline","Spur"][i%2];
-        if (/Asset Name\*/i.test(col)) return generateUniqueAssetName(assetType.substring(0,2).toUpperCase(),i);
-        if (/Primary Seg\?/i.test(col)) return "Y";
-        if (/Longitude\*/i.test(col)) return inspectionPoints[i]?.longitude||"";
-        if (/Latitude\*/i.test(col)) return inspectionPoints[i]?.latitude||"";
-        if (colIndex===latitudeIndex+1) return ((i+1)*1.1).toFixed(2);
-        if (colIndex===mappingIndex+1) return i+1;
-        if (colIndex===mappingIndex+2) return generateAlphanumericName();
-        if (/Criteria$/i.test(col) || /Criteria$/i.test(col.trim())) return criteriaSequence[i % criteriaSequence.length];
-        if (/Mileage\*/i.test(col)) return (i*0.1).toFixed(2);
-        if (/Creation Date\*/i.test(col)) return formatDate(today);
-        if (/Location description/i.test(col)) return getRandomLocationDescription();
-        if (/Operator/i.test(col)) return operators[Math.floor(Math.random()*operators.length)];
-        if (/_/.test(col)) return (Math.random()*2).toFixed(1);
-        if (/Threshold/i.test(col)) return (Math.random()*2-1).toFixed(2);
-        return "";
-      });
-      dataRows.push(row);
-    }
+    for(let i=0;i<inspectionPoints.length;i++){
+      const row=header.map((col,colIndex)=>{
+        if (col==="Stationing") return Math.floor(Math.random()*10000)+1;
+        if (col==="Facility Shot #") return generateFacilityShot();
+        if (/Region/i.test(col)) return "Region"+(i%3);
+        if (/Segment\*/i.test(col)) return "S"+String(i%10).padStart(3,'0');
+        if (/Segment Type\*/i.test(col)) return ["Mainline","Spur"][i%2];
+        if (/Asset Name\*/i.test(col)) return generateUniqueAssetName(assetType.substring(0,2).toUpperCase(),i);
+        if (/Primary Seg\?/i.test(col)) return "Y";
+        if (/Longitude\*/i.test(col)) return inspectionPoints[i]?.longitude||"";
+        if (/Latitude\*/i.test(col)) return inspectionPoints[i]?.latitude||"";
+        if (colIndex===latitudeIndex+1) return ((i+1)*1.1).toFixed(2);
+        if (colIndex===mappingIndex+1) return i+1;
+        if (colIndex===mappingIndex+2) return generateAlphanumericName();
+        if (/Criteria$/i.test(col) || /Criteria$/i.test(col.trim())) return criteriaSequence[i % criteriaSequence.length];
+        if (/Mileage\*/i.test(col)) return (i*0.1).toFixed(2);
+        if (/Creation Date\*/i.test(col)) return formatDate(today);
+        if (/Location description/i.test(col)) return getRandomLocationDescription();
+        if (/Operator/i.test(col)) return operators[Math.floor(Math.random()*operators.length)];
+        // Specific logic for Voltage and A
+        const lowerCaseCol = col.toLowerCase();
+        if (lowerCaseCol.includes("voltage")) return (Math.random() * 6.7).toFixed(2);
+        if (lowerCaseCol.includes("a")) return (Math.random() * (0.560 - (-4.7)) + (-4.7)).toFixed(3);
+        if (lowerCaseCol.includes("threshold")) return (Math.random()*2-1).toFixed(2);
+        return "";
+      });
+      dataRows.push(row);
+    }
 
-    showPreviewTable(header, dataRows.slice(0,10));
+    showPreviewTable(header, dataRows.slice(0,10));
 
-    const finalData=[header,...dataRows];
-    const newSheet=XLSX.utils.aoa_to_sheet(finalData);
-    const newWb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(newWb,newSheet,"Assets");
-    const outFileName=`${assetType}_Generated_Assets.xlsx`;
-    const wbout=XLSX.write(newWb,{ bookType:'xlsx', type:'binary' });
-    const s2ab=s=>{
-      const buf=new ArrayBuffer(s.length);
-      const view=new Uint8Array(buf);
-      for(let i=0;i<s.length;i++) view[i]=s.charCodeAt(i)&0xFF;
-      return buf;
-    };
-    const blob=new Blob([s2ab(wbout)],{ type:"application/octet-stream" });
-    const url=URL.createObjectURL(blob);
-    const downloadLink=document.getElementById("downloadLink");
-    downloadLink.href=url;
-    downloadLink.download=outFileName;
-    downloadLink.style.display="inline-block";
-  };
-  reader.readAsBinaryString(fileInput.files[0]);
+    const finalData=[header,...dataRows];
+    const newSheet=XLSX.utils.aoa_to_sheet(finalData);
+    const newWb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(newWb,newSheet,"Assets");
+    const outFileName=`${assetType}_Generated_Assets.xlsx`;
+    const wbout=XLSX.write(newWb,{ bookType:'xlsx', type:'binary' });
+    const s2ab=s=>{
+      const buf=new ArrayBuffer(s.length);
+      const view=new Uint8Array(buf);
+      for(let i=0;i<s.length;i++) view[i]=s.charCodeAt(i)&0xFF;
+      return buf;
+    };
+    const blob=new Blob([s2ab(wbout)],{ type:"application/octet-stream" });
+    const url=URL.createObjectURL(blob);
+    const downloadLink=document.getElementById("downloadLink");
+    downloadLink.href=url;
+    downloadLink.download=outFileName;
+    downloadLink.style.display="inline-block";
+  };
+  reader.readAsBinaryString(fileInput.files[0]);
 });
 </script>
 </body>
