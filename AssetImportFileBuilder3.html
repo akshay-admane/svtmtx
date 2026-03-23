@@ -1,231 +1,1021 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Pipeline Asset Import Tool</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@latest/ol.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
-<style>
-  html, body { height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-  .container { max-width: 900px; margin: 20px auto; padding: 10px; }
-  h2, h3 { color: #2c3e50; }
-  label { display: block; margin-top: 15px; font-weight: bold; }
-  input[type="file"] { margin-top: 5px; }
-  .btn { margin-top: 10px; padding: 8px 12px; background-color: #3498db; color: white; border: none; cursor: pointer; margin-right: 5px; }
-  .btn:hover { background-color: #2980b9; }
-  .download-link { display: none; margin-top: 15px; }
-  #map { width: 100%; height: 400px; margin-top: 20px; border: 1px solid #ccc; }
-  th, td { border: 1px solid black; padding: 5px; text-align: center; }
-  .inline { display: inline-block; margin-right: 10px; }
-  .help { color: #666; font-weight: normal; font-size: 12px; }
-  .preview-container { margin-top: 20px; max-height: 250px; overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; }
-  .preview-container table { border-collapse: collapse; min-width: max-content; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline Asset Import Tool</title>
+
+  <!-- Leaflet (much lighter than OpenLayers) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- SheetJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 20px auto;
+      padding: 14px 18px;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+    }
+
+    h2 {
+      color: #2c3e50;
+      margin: 0 0 14px;
+    }
+
+    h3 {
+      color: #2c3e50;
+      margin: 8px 0 6px;
+    }
+
+    label {
+      display: block;
+      margin-top: 14px;
+      font-weight: bold;
+      font-size: 13px;
+    }
+
+    input[type="file"] {
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    input[type="number"] {
+      padding: 5px 8px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 13px;
+      width: 90px;
+    }
+
+    .help {
+      color: #888;
+      font-weight: normal;
+      font-size: 11px;
+    }
+
+    /* Mode switcher */
+    .mode-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .mode-btn {
+      padding: 9px 16px;
+      background: #ecf0f1;
+      border: 2px solid #bdc3c7;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 13px;
+      border-radius: 4px;
+      color: #777;
+      transition: all .15s;
+    }
+
+    .mode-btn.active {
+      background: #2c3e50;
+      color: #fff;
+      border-color: #2c3e50;
+    }
+
+    .mode-desc {
+      background: #f8f9fa;
+      border-left: 4px solid #3498db;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #444;
+      margin: 10px 0 14px;
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 8px 13px;
+      background: #3498db;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      margin-right: 5px;
+      border-radius: 3px;
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: #2980b9;
+    }
+
+    .btn.green {
+      background: #27ae60;
+    }
+
+    .btn.green:hover {
+      background: #1e8449;
+    }
+
+    .btn.orange {
+      background: #e67e22;
+    }
+
+    .btn.orange:hover {
+      background: #ca6f1e;
+    }
+
+    .btn.red {
+      background: #e74c3c;
+    }
+
+    .btn.red:hover {
+      background: #c0392b;
+    }
+
+    .btn:disabled {
+      background: #95a5a6;
+      cursor: not-allowed;
+    }
+
+    .download-link {
+      display: none;
+    }
+
+    /* Map */
+    #map {
+      width: 100%;
+      height: 380px;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+
+    .map-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    #liveCounter {
+      display: inline-block;
+      padding: 6px 14px;
+      background: #2c3e50;
+      color: #fff;
+      border-radius: 3px;
+      font-size: 13px;
+      font-weight: bold;
+      min-width: 150px;
+      text-align: center;
+    }
+
+    .draw-hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    /* Progress */
+    #progressWrap {
+      display: none;
+      margin-top: 12px;
+    }
+
+    #progressBar {
+      width: 100%;
+      height: 16px;
+      background: #ecf0f1;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    #progressFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3498db, #27ae60);
+      transition: width .12s;
+      border-radius: 8px;
+    }
+
+    #progressLabel {
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+      margin-top: 3px;
+    }
+
+    /* Status */
+    .status-bar {
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: #eaf4fb;
+      border-left: 4px solid #3498db;
+      font-size: 13px;
+      display: none;
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-top: 18px;
+    }
+
+    .tab {
+      padding: 8px 16px;
+      background: #ecf0f1;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 13px;
+      border-bottom: none;
+      color: #777;
+    }
+
+    .tab.active {
+      background: #fff;
+      color: #2c3e50;
+      border-bottom: 1px solid #fff;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tab-content {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #fff;
+      max-height: 290px;
+      overflow: auto;
+    }
+
+    .preview-container {
+      margin-top: 8px;
+      max-height: 240px;
+      overflow-y: auto;
+      overflow-x: auto;
+      border: 1px solid #ddd;
+    }
+
+    .preview-container table {
+      border-collapse: collapse;
+      min-width: max-content;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 4px 8px;
+      text-align: center;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f0f0f0;
+    }
+
+    /* Downloads */
+    .download-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #ecf0f1;
+      border: 1px solid #bdc3c7;
+      border-radius: 3px;
+      padding: 2px 7px;
+      font-size: 11px;
+      color: #555;
+      margin-left: 5px;
+    }
+
+    /* Toggle switch */
+    .sw {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .sw input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .sw-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #ccc;
+      border-radius: 24px;
+      transition: .3s;
+    }
+
+    .sw-slider:before {
+      content: '';
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: .3s;
+    }
+
+    .sw input:checked+.sw-slider {
+      background: #27ae60;
+    }
+
+    .sw input:checked+.sw-slider:before {
+      transform: translateX(20px);
+    }
+  </style>
 </head>
+
 <body>
-<div class="container">
-  <h2>Pipeline Asset Import Tool</h2>
-  <form id="assetForm">
-    <label for="assetFile">Upload Reference File (.xlsx):</label>
-    <input type="file" id="assetFile" accept=".xlsx" required />
-    
-    <label for="assetSpacing">Distance between assets (km) <span class="help">(min 0.1 km)</span></label>
-    <input type="number" id="assetSpacing" class="inline" min="0.1" step="0.1" value="0.5" required inputmode="decimal" />
+  <div class="container">
+    <h2>🛢 Pipeline Asset Import Tool</h2>
 
-    <button type="submit" class="btn">Generate Asset Records</button>
-  </form>
+    <div class="mode-bar">
+      <button class="mode-btn active" id="modeBtn1" onclick="switchMode(1)">📋 Mode 1 — Create Assets &amp;
+        Inspections</button>
+      <button class="mode-btn" id="modeBtn2" onclick="switchMode(2)">🔍 Mode 2 — Inspections from Existing Asset
+        File</button>
+    </div>
 
-  <button class="btn" onclick="locateMe()">Locate Me</button>
-  <button class="btn" onclick="startDrawingLine()">Draw Pipeline Line</button>
-  <button class="btn" onclick="clearPoints()">Clear All Points</button>
+    <!-- MODE 1 -->
+    <div id="mode1Panel">
+      <p class="mode-desc">Upload a reference template (.xlsx), draw your pipeline on the map, and generate both the
+        <strong>Asset Import</strong> and <strong>Inspection Import</strong> files.</p>
+      <form id="assetForm">
+        <label for="assetFile">Upload Reference File (.xlsx): <span class="help">(asset column template)</span></label>
+        <input type="file" id="assetFile" accept=".xlsx" required />
 
-  <div id="map"></div>
+        <label for="assetSpacing">Distance between assets (km): <span class="help">(min 0.1)</span></label>
+        <input type="number" id="assetSpacing" min="0.1" step="0.1" value="0.5" required inputmode="decimal"
+          oninput="updateLiveCounter()" />
 
-  <h3>Generated File Preview (First 10 Rows)</h3>
-  <div class="preview-container">
-    <table id="previewTable"></table>
-  </div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:13px;font-weight:bold;">Spatial Reference 2 — whole number only?</span>
+          <label class="sw"><input type="checkbox" id="sr2IsNumber"
+              onchange="document.getElementById('sr2Hint').textContent=this.checked?'On — whole number':'Off — ESN / decimal'"><span
+              class="sw-slider"></span></label>
+          <span id="sr2Hint" style="font-size:12px;color:#888;">Off — ESN / decimal</span>
+        </div>
 
-  <a id="downloadLink" class="btn download-link">Download Generated File</a>
-</div>
+        <button type="submit" class="btn" id="generateBtn">⚙ Generate Asset &amp; Inspection Records</button>
+      </form>
 
-<script>
-const directions = ["North-east","North-west","South-east","South-west","Central","Upper","Lower","Left wing","Right wing","Front side"];
-const areas = ["of the plant","of the control room","near the generator","next to the fuel tank","adjacent to the pump room","under the main deck","beside the storage tank","inside the inspection zone","on top of the maintenance bay","at the entrance gate"];
-const criteriaSequence = [">100 mV shift", ">300 mV shift", "More negative than -850 mV"];
+      <div class="map-toolbar">
+        <button class="btn" onclick="locateMe()">📍 Locate Me</button>
+        <button class="btn" onclick="startDrawingLine()">✏ Draw Pipeline</button>
+        <button class="btn red" onclick="clearAll()">🗑 Clear</button>
+        <span id="liveCounter">Draw a pipeline</span>
+      </div>
+      <p class="draw-hint">Click to add waypoints · Double-click to finish drawing</p>
+      <div id="map"></div>
+    </div>
 
-function getRandomLocationDescription(){
-  return `${directions[Math.floor(Math.random()*directions.length)]} ${areas[Math.floor(Math.random()*areas.length)]}`;
-}
-function generateUniqueAssetName(prefix,index){
-  return `${prefix}-${String(index+1).padStart(4,'0')}`;
-}
-function formatDate(date){
-  return `${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}/${date.getFullYear()}`;
-}
-function generateFacilityShot(){
-  const words=[], numWords=1+Math.floor(Math.random()*3);
-  for(let i=0;i<numWords;i++){
-    if(i%2===0){
-      let letters='', len=2+Math.floor(Math.random()*3);
-      for(let j=0;j<len;j++) letters+=String.fromCharCode(65+Math.floor(Math.random()*26));
-      words.push(letters);
-    } else words.push(String(Math.floor(Math.random()*100)));
-  }
-  return words.join(' ');
-}
-function generateAlphanumericName(){
-  const words=["Alpha","Beta","Gamma","Delta","Omega","Sigma"];
-  return `${words[Math.floor(Math.random()*words.length)]} ${Math.floor(Math.random()*100)}`;
-}
+    <!-- MODE 2 -->
+    <div id="mode2Panel" style="display:none">
+      <p class="mode-desc">Upload an <strong>existing asset file</strong> (.xlsx). The tool reads <em>Asset Name*</em>
+        and <em>Segment*</em> from it and generates 10 years of inspection history.</p>
+      <form id="inspOnlyForm">
+        <label for="existingAssetFile">Upload Existing Asset File (.xlsx):</label>
+        <input type="file" id="existingAssetFile" accept=".xlsx" required />
+        <div id="assetReadStatus" style="margin-top:6px;font-size:13px;"></div>
+        <button type="submit" class="btn orange" style="margin-top:12px">⚙ Generate Inspection Records</button>
+      </form>
+    </div>
 
-const inspectionPoints=[];
-let drawInteraction, drawLayer, map, vectorSource;
+    <!-- Progress -->
+    <div id="progressWrap">
+      <div id="progressBar">
+        <div id="progressFill"></div>
+      </div>
+      <div id="progressLabel">Preparing…</div>
+    </div>
 
-window.onload=()=>{
-  requestAnimationFrame(()=>{
-    map=new ol.Map({target:'map', layers:[new ol.layer.Tile({source:new ol.source.OSM()})], view:new ol.View({center:ol.proj.fromLonLat([-80,25]), zoom:6})});
-    vectorSource=new ol.source.Vector();
-    map.addLayer(new ol.layer.Vector({source:vectorSource}));
-    setTimeout(()=>map.updateSize(),0);
-  });
-};
+    <!-- Status -->
+    <div id="statusBar" class="status-bar"></div>
 
-function addInspectionPointMarker(lat,lng){
-  const feature=new ol.Feature({geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat]))});
-  feature.setStyle(new ol.style.Style({image:new ol.style.Circle({radius:4,fill:new ol.style.Fill({color:'green'})})}));
-  vectorSource.addFeature(feature);
-}
-function locateMe(){
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const lat=pos.coords.latitude,lng=pos.coords.longitude;
-    map.getView().animate({center:ol.proj.fromLonLat([lng,lat]),zoom:14});
-  });
-}
-function clearPoints(){
-  vectorSource.clear();
-  inspectionPoints.length=0;
-  if(drawInteraction) map.removeInteraction(drawInteraction);
-  if(drawLayer) map.removeLayer(drawLayer);
-}
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <div class="tab active" id="tabAsset" onclick="switchTab('asset')">Asset Preview <span id="assetBadge"
+          class="badge">–</span></div>
+      <div class="tab" id="tabInspection" onclick="switchTab('inspection')">Inspection Preview <span id="inspBadge"
+          class="badge">–</span></div>
+    </div>
+    <div class="tab-content">
+      <div id="panelAsset">
+        <h3>Asset File — First 10 Rows</h3>
+        <div class="preview-container">
+          <table id="previewTable"></table>
+        </div>
+      </div>
+      <div id="panelInspection" style="display:none">
+        <h3>Inspection File — First 10 Rows</h3>
+        <div class="preview-container">
+          <table id="previewInspTable"></table>
+        </div>
+      </div>
+    </div>
 
-function startDrawingLine(){
-  clearPoints();
-  const drawSource=new ol.source.Vector({wrapX:false});
-  drawLayer=new ol.layer.Vector({
-    source:drawSource,
-    style:new ol.style.Style({stroke:new ol.style.Stroke({color:'#ff0000',width:2})})
-  });
-  map.addLayer(drawLayer);
+    <!-- Downloads -->
+    <div class="download-row">
+      <a id="downloadLink" class="btn green  download-link">⬇ Download Asset Import File</a>
+      <a id="downloadInspLink" class="btn orange download-link">⬇ Download Inspection Import File</a>
+    </div>
+  </div>
 
-  drawInteraction=new ol.interaction.Draw({source:drawSource,type:'LineString'});
-  map.addInteraction(drawInteraction);
+  <script>
+    'use strict';
 
-  drawInteraction.on('drawend',(event)=>{
-    const geometry=event.feature.getGeometry();
-    map.removeInteraction(drawInteraction);
-    const spacingKm=parseFloat(document.getElementById("assetSpacing").value) || 0.5;
-    generatePointsAlongLine(geometry, spacingKm);
-  });
-}
+    /* ═══════════════════════════════════════════════════
+       CONSTANTS & HELPERS
+    ═══════════════════════════════════════════════════ */
+    const DIRECTIONS = ["North-east", "North-west", "South-east", "South-west", "Central", "Upper", "Lower", "Left wing", "Right wing", "Front side"];
+    const AREAS = ["of the plant", "of the control room", "near the generator", "next to the fuel tank", "adjacent to the pump room", "under the main deck", "beside the storage tank", "inside the inspection zone", "on top of the maintenance bay", "at the entrance gate"];
+    const CRITERIA_SEQ = [">100 mV shift", ">300 mV shift", "More negative than -850 mV"];
+    const TECH_NAMES = ["J. Martinez", "R. Patel", "S. Thompson", "A. Nguyen", "D. Williams", "K. O'Brien", "M. Singh", "T. Kowalski", "L. Chen", "B. Ferreira"];
+    const SURVEY_PFX = ["Annual-CP", "Routine-CP", "Close-Interval", "Half-Cell", "Seasonal-CP", "Compliance-CP"];
+    const ALPHA_WORDS = ["Alpha", "Beta", "Gamma", "Delta", "Omega", "Sigma", "Kappa", "Theta", "Lambda", "Zeta"];
+    const SR3_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const OPERATORS = ["equals", "more negative than", "More positive than", "greater than", "less than", "equals and more positive than", "equals and more negative than"];
 
-function generatePointsAlongLine(lineGeometry, spacingKm){
-  inspectionPoints.length=0; vectorSource.clear();
-  const lineCoords=lineGeometry.getCoordinates();
-  const line=new ol.geom.LineString(lineCoords);
-  const spacingM=spacingKm*1000;
-  const length=ol.sphere.getLength(line);
+    const ASSET_COMMENT_TPLS = [
+      (s, n, l) => `Asset ${n} in segment ${s} located ${l}. CP readings nominal.`,
+      (s, n, l) => `Cathodic protection unit ${n} — ${l}. Segment ${s} — no anomalies detected.`,
+      (s, n, l) => `Field asset ${n}. Location: ${l}. Segment: ${s}. Routine monitoring point.`,
+      (s, n, l) => `${n} (${s}) at ${l}. Asset functioning within design parameters.`,
+      (s, n, l) => `Monitoring asset ${n} positioned ${l}. Segment ${s}. CP protection confirmed.`,
+    ];
+    const INSP_COMMENT_NOTES = [
+      (s, n, y) => `Annual CP survey ${y}. Asset ${n} (${s}) inspected. Readings within acceptable limits.`,
+      (s, n, y) => `Scheduled inspection ${y}. Segment ${s} — ${n} shows normal cathodic protection levels.`,
+      (s, n, y) => `CP monitoring ${y}. Asset ${n} checked in segment ${s}. No anomalies recorded.`,
+      (s, n, y) => `Annual survey ${y}. ${n} in ${s} — protection levels satisfactory. Next inspection in 12 months.`,
+    ];
 
-  for(let dist=0; dist<=length; dist+=spacingM){
-    const coord=line.getCoordinateAt(dist/length);
-    const lonLat=ol.proj.toLonLat(coord);
-    addInspectionPointMarker(lonLat[1],lonLat[0]);
-    inspectionPoints.push({ latitude:lonLat[1].toFixed(6), longitude:lonLat[0].toFixed(6) });
-  }
-}
+    function rand(a, b) { return Math.random() * (b - a) + a; }
+    function randInt(a, b) { return Math.floor(rand(a, b + 0.9999)); }
+    function pick(arr) { return arr[randInt(0, arr.length - 1)]; }
+    function fmt2(n) { return String(n).padStart(2, '0'); }
+    function fmt3(n) { return String(n).padStart(3, '0'); }
 
-function showPreviewTable(headers,data){
-  const table=document.getElementById("previewTable");
-  let html="<thead><tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr></thead><tbody>";
-  data.forEach(row=>{
-    html+="<tr>"+row.map(cell=>`<td>${cell}</td>`).join("")+"</tr>";
-  });
-  html+="</tbody>";
-  table.innerHTML=html;
-}
+    function formatDate(d) {
+      return `${d.getFullYear()}-${fmt2(d.getMonth() + 1)}-${fmt2(d.getDate())}`;
+    }
+    function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+    function addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
 
-document.getElementById("assetForm").addEventListener("submit",function(e){
-  e.preventDefault();
-  const fileInput=document.getElementById("assetFile");
-  if(!fileInput.files.length) return alert("Please select a file.");
-  if(inspectionPoints.length===0) return alert("Please draw a pipeline line first.");
+    function getLocation() { return `${pick(DIRECTIONS)} ${pick(AREAS)}`; }
 
-  const reader=new FileReader();
-  reader.onload=function(event){
-    const workbook=XLSX.read(event.target.result,{type:'binary'});
-    const sheet=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]],{header:1});
-    const header=sheet[0];
-    const dataRows=[];
-    const today=new Date();
-    const operators=["equals","more negative than","More positive than", "greater than","less than", "equals and more positive than", "equals and more negative than" ];
-    const assetType=fileInput.files[0].name.split(" ")[0];
-    const latitudeIndex = header.findIndex(h=>/Latitude\*/i.test(h));
-    const mappingIndex = header.findIndex(h=>/Mapping Asset ID/i.test(h));
+    function generateAssetName(prefix, date, idx) {
+      return `${prefix}-${fmt2(date.getMonth() + 1)}/${fmt2(date.getDate())}-${String(idx + 1).padStart(4, '0')}`;
+    }
 
-    for(let i=0;i<inspectionPoints.length;i++){
-      const row=header.map((col,colIndex)=>{
-        if (col==="Stationing") return Math.floor(Math.random()*10000)+1;
-        if (col==="Facility Shot #") return generateFacilityShot();
-        if (/Region/i.test(col)) return "Region"+(i%3);
-        if (/Segment\*/i.test(col)) return "S"+String(i%10).padStart(3,'0');
-        if (/Segment Type\*/i.test(col)) return ["Mainline","Spur"][i%2];
-        if (/Asset Name\*/i.test(col)) return generateUniqueAssetName(assetType.substring(0,2).toUpperCase(),i);
-        if (/Primary Seg\?/i.test(col)) return "Y";
-        if (/Longitude\*/i.test(col)) return inspectionPoints[i]?.longitude||"";
-        if (/Latitude\*/i.test(col)) return inspectionPoints[i]?.latitude||"";
-        if (colIndex===latitudeIndex+1) return ((i+1)*1.1).toFixed(2);
-        if (colIndex===mappingIndex+1) return i+1;
-        if (colIndex===mappingIndex+2) return generateAlphanumericName();
-        if (/Criteria$/i.test(col) || /Criteria$/i.test(col.trim())) return criteriaSequence[i % criteriaSequence.length];
-        if (/Mileage\*/i.test(col)) return (i*0.1).toFixed(2);
-        if (/Creation Date\*/i.test(col)) return formatDate(today);
-        if (/Location description/i.test(col)) return getRandomLocationDescription();
-        if (/Operator/i.test(col)) return operators[Math.floor(Math.random()*operators.length)];
-        // Specific logic for Voltage and A
-        const lowerCaseCol = col.toLowerCase();
-        if (lowerCaseCol.includes("voltage")) return (Math.random() * 6.7).toFixed(2);
-        if (lowerCaseCol.includes("a")) return (Math.random() * (0.560 - (-4.7)) + (-4.7)).toFixed(3);
-        if (lowerCaseCol.includes("threshold")) return (Math.random()*2-1).toFixed(2);
-        return "";
-      });
-      dataRows.push(row);
-    }
+    function generateFacilityShot() {
+      const p = [], n = randInt(1, 3);
+      for (let i = 0; i < n; i++) {
+        if (i % 2 === 0) { let s = '', l = randInt(2, 4); for (let j = 0; j < l; j++)s += String.fromCharCode(65 + randInt(0, 25)); p.push(s); }
+        else p.push(String(randInt(1, 99)));
+      }
+      return p.join(' ');
+    }
+    function generateAlphanumericName() { return `${pick(ALPHA_WORDS)} ${randInt(1, 99)}`; }
+    function generateSR3() {
+      return `${SR3_ABC[randInt(0, SR3_ABC.length - 1)]}${SR3_ABC[randInt(0, SR3_ABC.length - 1)]}-${randInt(100, 9999)}`;
+    }
 
-    showPreviewTable(header, dataRows.slice(0,10));
+    /* ── Spatial Reference value by unit ── */
+    function generateSpatialRef(colName, idx, spacingKm) {
+      if (/\(m\)/i.test(colName)) {
+        const distM = idx * spacingKm * 1000;
+        return `${Math.floor(distM / 1000)}+${fmt3(Math.round(distM % 1000))}`;
+      }
+      if (/\(ft\)/i.test(colName)) {
+        const distFt = idx * spacingKm * 3280.84;
+        return `${Math.floor(distFt / 100)}+${String(Math.round(distFt % 100)).padStart(2, '0')}`;
+      }
+      if (/\(km\)/i.test(colName)) {
+        const v = idx * spacingKm;
+        return v === 0 ? '0' : v.toFixed(randInt(1, 3));
+      }
+      if (/\(mi\)/i.test(colName)) {
+        const v = idx * spacingKm * 0.621371;
+        return v === 0 ? '0' : v.toFixed(randInt(1, 3));
+      }
+      return (idx * spacingKm).toFixed(3);
+    }
 
-    const finalData=[header,...dataRows];
-    const newSheet=XLSX.utils.aoa_to_sheet(finalData);
-    const newWb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(newWb,newSheet,"Assets");
-    const outFileName=`${assetType}_Generated_Assets.xlsx`;
-    const wbout=XLSX.write(newWb,{ bookType:'xlsx', type:'binary' });
-    const s2ab=s=>{
-      const buf=new ArrayBuffer(s.length);
-      const view=new Uint8Array(buf);
-      for(let i=0;i<s.length;i++) view[i]=s.charCodeAt(i)&0xFF;
-      return buf;
-    };
-    const blob=new Blob([s2ab(wbout)],{ type:"application/octet-stream" });
-    const url=URL.createObjectURL(blob);
-    const downloadLink=document.getElementById("downloadLink");
-    downloadLink.href=url;
-    downloadLink.download=outFileName;
-    downloadLink.style.display="inline-block";
-  };
-  reader.readAsBinaryString(fileInput.files[0]);
-});
-</script>
+    /* ── Comments ── */
+    function generateAssetComment(seg, name) {
+      const t = ASSET_COMMENT_TPLS[randInt(0, ASSET_COMMENT_TPLS.length - 1)];
+      return t(seg, name, getLocation());
+    }
+    function generateInspComment(seg, name, year, isLatest) {
+      if (isLatest) return `Latest annual survey ${year}. Asset ${name} in segment ${seg} — all CP readings within specification. No corrective action required.`;
+      const t = INSP_COMMENT_NOTES[randInt(0, INSP_COMMENT_NOTES.length - 1)];
+      return t(seg, name, year);
+    }
+
+    /* ── Survey dates: 10 years, oldest→newest ── */
+    /* Month names for segment labels */
+    const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"];
+
+    function buildSurveyDates(numYears) {
+      const today = new Date();
+      const latest = addDays(addMonths(today, -randInt(1, 15)), randInt(-15, 15));
+      const dates = [latest];
+      for (let i = 1; i < numYears; i++) dates.push(addDays(addMonths(dates[dates.length - 1], -12), randInt(-30, 30)));
+      return dates.reverse();
+    }
+
+    /* ═══════════════════════════════════════════════════
+       INSPECTION COLUMNS
+    ═══════════════════════════════════════════════════ */
+    const INSP_MEAS = [
+      "Primary P/S ON AC (V)", "Primary P/S ON DC (V)", "Primary P/S OFF DC (V)",
+      "Primary Output Current (A)", "Primary Output Voltage (V)",
+      "Casing Output Voltage Left (V)", "Casing Output Voltage Found (V)",
+      "Foreign Output Current Found (A)", "Foreign Output Current Left (A)",
+      "Casing AC Current Density (A/m²)", "Casing DC Current Density (A/m²)",
+      "Casing to P/S Delta OFF (V)", "Casing to P/S Delta ON (V)",
+      "Casing P/S ON DC (V)", "Casing P/S OFF DC (V)", "Casing Output Current Found (A)",
+      "Primary Output Voltage Left (V)", "Soil Pole Soil Resistivity (ohm-meters)",
+      "OFF DC P/S OFF DC (V)", "Casing Soil Resistivity (ohm-meters)",
+      "Foreign P/S OFF DC (V)", "Casing P/S ON AC (V)",
+      "Foreign Output Voltage Found (V)", "Foreign Output Voltage Left (V)",
+      "Casing Output Current Left (A)", "Casing AC Current (A)", "Casing DC Current (A)",
+      "Foreign AC Current Density (A/m²)", "Foreign DC Current Density (A/m²)",
+      "Soil Bar Soil Resistivity (ohm-meters)", "Foreign P/S ON DC (V)"
+    ];
+    const INSP_HEADER = ["Segment*", "Asset Name*", ...INSP_MEAS, "Date of Inspection*", "Survey Name*", "Technician", "Comments"];
+
+    const MEAS_RANGES = {
+      "primary p/s on ac": [-0.5, 0.5], "primary p/s on dc": [-1.5, -0.7], "primary p/s off dc": [-1.2, -0.6],
+      "primary output current": [0.05, 2.0], "primary output voltage": [12, 24],
+      "casing output voltage": [-0.5, 0.5], "foreign output current": [0.01, 0.5],
+      "foreign output voltage": [-0.3, 0.3], "current density": [0.1, 5.0],
+      "soil resistivity": [10, 500], "delta": [-0.5, 0.5]
+    };
+    function getMeasVal(col) {
+      const lc = col.toLowerCase();
+      for (const [k, r] of Object.entries(MEAS_RANGES)) if (lc.includes(k)) return rand(r[0], r[1]).toFixed(3);
+      if (/\(v\)/i.test(col)) return rand(-1.5, 0.5).toFixed(3);
+      if (/\(a\)/i.test(col)) return rand(0.01, 2.0).toFixed(3);
+      if (/\(ohm/i.test(col)) return rand(5, 600).toFixed(1);
+      if (/\(a\/m/i.test(col)) return rand(0.1, 5.0).toFixed(3);
+      return rand(-1, 1).toFixed(3);
+    }
+
+    /* ═══════════════════════════════════════════════════
+       MAP — LEAFLET
+    ═══════════════════════════════════════════════════ */
+    let map, markerLayer;
+    const waypoints = [];        // L.LatLng[]
+    let polylineDraw = null;     // current drawn polyline
+    let drawingActive = false;
+
+    window.addEventListener('load', () => {
+      map = L.map('map', { doubleClickZoom: false }).setView([25, -80], 4);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+      }).addTo(map);
+      markerLayer = L.layerGroup().addTo(map);
+    });
+
+    /* Haversine distance in km */
+    function hvKm(ll1, ll2) {
+      const R = 6371, f = Math.PI / 180;
+      const dLat = (ll2.lat - ll1.lat) * f, dLon = (ll2.lng - ll1.lng) * f;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(ll1.lat * f) * Math.cos(ll2.lat * f) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+    function totalKm(pts) { let d = 0; for (let i = 1; i < pts.length; i++) d += hvKm(pts[i - 1], pts[i]); return d; }
+
+    /* Destination point given start, bearing (rad), distance (km) */
+    function destPt(ll, bearing, distKm) {
+      const R = 6371, d = distKm / R, f = Math.PI / 180;
+      const lat1 = ll.lat * f, lon1 = ll.lng * f;
+      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(bearing));
+      const lon2 = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+      return L.latLng(lat2 / f, lon2 / f);
+    }
+    function bearing(ll1, ll2) {
+      const f = Math.PI / 180, dL = (ll2.lng - ll1.lng) * f;
+      const lat1 = ll1.lat * f, lat2 = ll2.lat * f;
+      return Math.atan2(Math.sin(dL) * Math.cos(lat2), Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dL));
+    }
+
+    /* Interpolate evenly-spaced points along waypoints polyline */
+    function interpolatePoints(spacingKm) {
+      if (waypoints.length < 2) return [];
+      const pts = [waypoints[0]];
+      let segIdx = 0, posInSeg = 0;
+
+      while (segIdx < waypoints.length - 1) {
+        const segLen = hvKm(waypoints[segIdx], waypoints[segIdx + 1]);
+        const bear = bearing(waypoints[segIdx], waypoints[segIdx + 1]);
+        posInSeg += spacingKm;
+
+        while (posInSeg <= segLen) {
+          pts.push(destPt(waypoints[segIdx], bear, posInSeg));
+          posInSeg += spacingKm;
+        }
+        posInSeg -= segLen;
+        segIdx++;
+      }
+      return pts;
+    }
+
+    function updateLiveCounter() {
+      const spacing = parseFloat(document.getElementById('assetSpacing').value) || 0.5;
+      if (waypoints.length < 2) {
+        document.getElementById('liveCounter').textContent = waypoints.length === 1 ? '📍 1 point — keep drawing' : 'Draw a pipeline';
+        return;
+      }
+      const km = totalKm(waypoints);
+      const count = interpolatePoints(spacing).length;
+      const dStr = km < 1 ? `${(km * 1000).toFixed(0)} m` : `${km.toFixed(2)} km`;
+      document.getElementById('liveCounter').textContent = `📏 ${dStr} → ${count.toLocaleString()} assets`;
+    }
+
+    function redrawPolyline() {
+      if (polylineDraw) map.removeLayer(polylineDraw);
+      if (waypoints.length >= 2) {
+        polylineDraw = L.polyline(waypoints, { color: '#e74c3c', weight: 3 }).addTo(map);
+      }
+    }
+
+    function onMapClick(e) {
+      if (!drawingActive) return;
+      waypoints.push(e.latlng);
+      L.circleMarker(e.latlng, { radius: 5, color: '#e74c3c', fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(markerLayer);
+      redrawPolyline();
+      updateLiveCounter();
+    }
+    function onMapDblClick(e) {
+      if (waypoints.length > 0) waypoints.pop(); // remove duplicate from dblclick
+      if (waypoints.length < 2) { clearAll(); return; }
+      drawingActive = false;
+      map.off('click', onMapClick);
+      map.off('dblclick', onMapDblClick);
+      map.getContainer().style.cursor = '';
+      redrawPolyline();
+      updateLiveCounter();
+    }
+
+    function startDrawingLine() {
+      clearAll();
+      drawingActive = true;
+      map.getContainer().style.cursor = 'crosshair';
+      document.getElementById('liveCounter').textContent = '📍 Click map to add points…';
+      map.on('click', onMapClick);
+      map.on('dblclick', onMapDblClick);
+    }
+    function clearAll() {
+      drawingActive = false;
+      map.off('click', onMapClick);
+      map.off('dblclick', onMapDblClick);
+      map.getContainer().style.cursor = '';
+      waypoints.length = 0;
+      if (polylineDraw) { map.removeLayer(polylineDraw); polylineDraw = null; }
+      markerLayer.clearLayers();
+      document.getElementById('liveCounter').textContent = 'Draw a pipeline';
+    }
+    function locateMe() {
+      navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 14),
+        () => alert('Location access denied.'));
+    }
+
+    /* ═══════════════════════════════════════════════════
+       UI HELPERS
+    ═══════════════════════════════════════════════════ */
+    function yieldUI() { return new Promise(r => setTimeout(r, 0)); }
+    function showProgress(pct, lbl) {
+      document.getElementById('progressWrap').style.display = 'block';
+      document.getElementById('progressFill').style.width = `${Math.min(100, pct)}%`;
+      document.getElementById('progressLabel').textContent = lbl;
+    }
+    function hideProgress() { document.getElementById('progressWrap').style.display = 'none'; }
+    function setStatus(msg) {
+      const b = document.getElementById('statusBar'); b.textContent = msg; b.style.display = 'block';
+    }
+    function showPreviewTable(tid, headers, rows) {
+      const t = document.getElementById(tid);
+      let h = '<thead><tr>' + headers.map(x => `<th>${x}</th>`).join('') + '</tr></thead><tbody>';
+      rows.forEach(r => { h += '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>'; });
+      t.innerHTML = h + '</tbody>';
+    }
+    function switchTab(which) {
+      ['asset', 'inspection'].forEach(w => {
+        document.getElementById('panel' + w.charAt(0).toUpperCase() + w.slice(1)).style.display = w === which ? '' : 'none';
+        document.getElementById('tab' + w.charAt(0).toUpperCase() + w.slice(1)).classList.toggle('active', w === which);
+      });
+    }
+    function switchMode(mode) {
+      document.getElementById('mode1Panel').style.display = mode === 1 ? '' : 'none';
+      document.getElementById('mode2Panel').style.display = mode === 2 ? '' : 'none';
+      document.getElementById('modeBtn1').classList.toggle('active', mode === 1);
+      document.getElementById('modeBtn2').classList.toggle('active', mode === 2);
+      document.getElementById('tabAsset').style.display = mode === 2 ? 'none' : '';
+      document.getElementById('downloadLink').style.display = 'none';
+      document.getElementById('downloadInspLink').style.display = 'none';
+      document.getElementById('statusBar').style.display = 'none';
+      document.getElementById('assetBadge').textContent = '–';
+      document.getElementById('inspBadge').textContent = '–';
+      document.getElementById('previewTable').innerHTML = '';
+      document.getElementById('previewInspTable').innerHTML = '';
+      document.getElementById('assetReadStatus').textContent = '';
+      hideProgress();
+      if (mode === 2) switchTab('inspection'); else switchTab('asset');
+    }
+
+    /* ═══════════════════════════════════════════════════
+       XLSX DOWNLOAD
+    ═══════════════════════════════════════════════════ */
+    function downloadXlsx(aoa, sheetName, fileName, linkId) {
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+      Object.keys(ws).forEach(addr => {
+        if (addr[0] === '!') return;
+        const c = ws[addr];
+        if (c && dateRe.test(String(c.v))) { c.t = 's'; c.v = String(c.v); delete c.w; }
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      const out = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+      const s2ab = s => { const b = new ArrayBuffer(s.length), v = new Uint8Array(b); for (let i = 0; i < s.length; i++)v[i] = s.charCodeAt(i) & 0xFF; return b; };
+      const blob = new Blob([s2ab(out)], { type: 'application/octet-stream' });
+      const link = document.getElementById(linkId);
+      link.href = URL.createObjectURL(blob); link.download = fileName; link.style.display = 'inline-block';
+    }
+
+    /* ═══════════════════════════════════════════════════
+       MODE 1 — GENERATE ASSETS + INSPECTIONS
+    ═══════════════════════════════════════════════════ */
+    document.getElementById('assetForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('assetFile');
+      if (!fileInput.files.length) return alert('Please select a reference file.');
+      if (waypoints.length < 2) return alert('Please draw a pipeline on the map first.\nClick to add points, double-click to finish.');
+
+      if (drawingActive) { // auto-finish if still drawing
+        drawingActive = false; map.off('click', onMapClick); map.off('dblclick', onMapDblClick);
+        map.getContainer().style.cursor = '';
+      }
+
+      const spacingKm = parseFloat(document.getElementById('assetSpacing').value) || 0.5;
+      const generateBtn = document.getElementById('generateBtn');
+      generateBtn.disabled = true; generateBtn.textContent = '⏳ Working…';
+
+      const reader = new FileReader();
+      reader.onload = async function (ev) {
+        try {
+          const wb = XLSX.read(ev.target.result, { type: 'binary' });
+          const sheet = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+          const header = sheet[0];
+          const today = new Date();
+          const assetType = fileInput.files[0].name.split(/[\s_.]/)[0];
+
+          const lonIdx = header.findIndex(h => /Longitude\*/i.test(h));
+          const latIdx = header.findIndex(h => /Latitude\*/i.test(h));
+          const mapIdx = header.findIndex(h => /Mapping Asset ID/i.test(h));
+
+          /* Interpolate points */
+          showProgress(2, 'Interpolating pipeline points…'); await yieldUI();
+          const points = interpolatePoints(spacingKm);
+          if (!points.length) { alert('No points generated. Check spacing and pipeline length.'); return; }
+
+          /* ── ASSET ROWS ── */
+          const assetRows = [], assets = [];
+          const CHUNK = 500;
+          const sr2AsNumber = document.getElementById('sr2IsNumber').checked;
+
+          // Segment names: "Seg- <MonthName> 1" and "Seg- <MonthName> 2"
+          const creationMonth = MONTH_NAMES[today.getMonth()];
+          const SEG_NAMES = [`Seg- ${creationMonth} 1`, `Seg- ${creationMonth} 2`];
+
+          for (let i = 0; i < points.length; i++) {
+            const assetName = generateAssetName(assetType, today, i);
+            const segment = SEG_NAMES[i % 2];
+            const loc = getLocation();
+
+            const row = header.map((col, ci) => {
+              const ct = col ? col.trim() : '';
+              if (ct === 'Stationing') return randInt(1, 9999);
+              if (ct === 'Facility Shot #') return generateFacilityShot();
+              if (/Region/i.test(ct)) return 'Region' + (i % 3);
+              if (/Segment\*/i.test(ct)) return segment;
+              if (/Segment Type\*/i.test(ct)) return ['Mainline', 'Spur'][i % 2];
+              if (/Asset Name\*/i.test(ct)) return assetName;
+              if (/Primary Seg\?/i.test(ct)) return 'Y';
+              if (/Longitude\*/i.test(ct)) return points[i].lng.toFixed(6);
+              if (/Latitude\*/i.test(ct)) return points[i].lat.toFixed(6);
+              // Spatial Reference 1 — 1st col after Longitude*
+              if (lonIdx !== -1 && ci === lonIdx + 1 && ct) return generateSpatialRef(ct, i, spacingKm);
+              // Spatial Reference 2 — 2nd col after Longitude* (whole number if toggle on)
+              if (lonIdx !== -1 && ci === lonIdx + 2 && ct) return sr2AsNumber ? i + 1 : generateSpatialRef(ct, i, spacingKm);
+              // Spatial Reference 3 — 3rd col after Longitude* (alphanumeric)
+              if (lonIdx !== -1 && ci === lonIdx + 3 && ct) return generateSR3();
+              if (latIdx !== -1 && ci === latIdx + 1) return ((i + 1) * 1.1).toFixed(2);
+              if (mapIdx !== -1 && ci === mapIdx + 1) return i + 1;
+              if (mapIdx !== -1 && ci === mapIdx + 2) return generateAlphanumericName();
+              if (/Criteria$/i.test(ct)) return CRITERIA_SEQ[i % CRITERIA_SEQ.length];
+              if (/Mileage\*/i.test(ct)) return (i * spacingKm).toFixed(3);
+              if (/Creation Date\*/i.test(ct)) return formatDate(today);
+              if (/Location description/i.test(ct)) return loc;
+              if (/Coupon Size/i.test(ct)) return 10000;
+              //if (/Effective Native.*Depol/i.test(ct))             return rand(-0.85,-0.65).toFixed(3);
+              if (/Effective Native.*Depol/i.test(ct)) {
+                return (Math.round(rand(-0.85, -0.65) * 10000) / 10000);
+              }
+              // Threshold Operator — must come before Operator and Threshold checks
+              if (/Threshold Operator/i.test(ct)) return pick(OPERATORS);
+              if (/Operator/i.test(ct)) return pick(OPERATORS);
+              if (/Comments?/i.test(ct)) return generateAssetComment(segment, assetName);
+              if (/_/.test(ct)) return rand(0, 2).toFixed(1);
+              // Threshold (value only — not Threshold Operator)
+              if (/Threshold/i.test(ct) && !/Operator/i.test(ct)) return rand(-1, 1).toFixed(2);
+              return '';
+            });
+
+            assetRows.push(row);
+            assets.push({ assetName, segment });
+
+            if (i % CHUNK === 0) {
+              showProgress(5 + (i / points.length) * 35, `Asset ${i.toLocaleString()} of ${points.length.toLocaleString()}…`);
+              await yieldUI();
+            }
+          }
+
+          /* ── INSPECTION ROWS ── */
+          const YEARS = 10, surveyDates = buildSurveyDates(YEARS);
+          const total = YEARS * assets.length;
+          const inspRows = []; let cnt = 0;
+
+          for (let yr = 0; yr < YEARS; yr++) {
+            const sd = surveyDates[yr];
+            const sn = `${pick(SURVEY_PFX)}-${sd.getFullYear()}`;
+            const tech = pick(TECH_NAMES);
+            const latest = yr === YEARS - 1;
+
+            for (const a of assets) {
+              inspRows.push([
+                a.segment, a.assetName,
+                ...INSP_MEAS.map(c => getMeasVal(c)),
+                formatDate(sd), sn, tech,
+                generateInspComment(a.segment, a.assetName, sd.getFullYear(), latest)
+              ]);
+              cnt++;
+              if (cnt % 2000 === 0) {
+                showProgress(40 + (cnt / total) * 45, `Inspection ${cnt.toLocaleString()} of ${total.toLocaleString()}…`);
+                await yieldUI();
+              }
+            }
+          }
+
+          /* ── PREVIEW ── */
+          showProgress(88, 'Building previews…'); await yieldUI();
+          showPreviewTable('previewTable', header, assetRows.slice(0, 10));
+          showPreviewTable('previewInspTable', INSP_HEADER, inspRows.slice(0, 10));
+          document.getElementById('assetBadge').textContent = `${assetRows.length.toLocaleString()} assets`;
+          document.getElementById('inspBadge').textContent = `${inspRows.length.toLocaleString()} records`;
+
+          /* ── DOWNLOAD ── */
+          showProgress(92, 'Writing Asset file…'); await yieldUI();
+          downloadXlsx([header, ...assetRows], 'Assets', `${assetType}_Asset_Import.xlsx`, 'downloadLink');
+          showProgress(97, 'Writing Inspection file…'); await yieldUI();
+          downloadXlsx([INSP_HEADER, ...inspRows], 'Inspections', `${assetType}_Inspection_Import.xlsx`, 'downloadInspLink');
+          showProgress(100, 'Done!'); await yieldUI(); hideProgress();
+
+          setStatus(`✅ Generated ${assetRows.length.toLocaleString()} assets and ${inspRows.length.toLocaleString()} inspection records (${YEARS} annual surveys). Latest survey within last 15 months.`);
+
+        } catch (err) {
+          alert('Error: ' + err.message); hideProgress();
+        } finally {
+          generateBtn.disabled = false; generateBtn.textContent = '⚙ Generate Asset & Inspection Records';
+        }
+      };
+      reader.readAsBinaryString(fileInput.files[0]);
+    });
+
+    /* ═══════════════════════════════════════════════════
+       MODE 2 — FILE SELECT PREVIEW
+    ═══════════════════════════════════════════════════ */
+    document.getElementById('existingAssetFile').addEventListener('change', function () {
+      const el = document.getElementById('assetReadStatus'), file = this.files[0]; if (!file) return;
+      const r = new FileReader();
+      r.onload = function (e) {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'binary' });
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+          const hdr = rows[0] || [];
+          const nc = hdr.findIndex(h => /Asset Name\*/i.test(h));
+          const sc = hdr.findIndex(h => /Segment\*/i.test(h));
+          if (nc === -1 || sc === -1) { el.style.color = '#e74c3c'; el.textContent = '⚠ Could not find "Asset Name*" or "Segment*" columns.'; return; }
+          const cnt = rows.slice(1).filter(r => r[nc] && String(r[nc]).trim()).length;
+          el.style.color = '#27ae60';
+          el.textContent = `✅ Found ${cnt.toLocaleString()} assets → will generate ${(cnt * 10).toLocaleString()} inspection records (10 annual surveys).`;
+        } catch (err) { el.style.color = '#e74c3c'; el.textContent = '⚠ Could not read file: ' + err.message; }
+      };
+      r.readAsBinaryString(file);
+    });
+
+    /* ═══════════════════════════════════════════════════
+       MODE 2 — GENERATE INSPECTIONS
+    ═══════════════════════════════════════════════════ */
+    document.getElementById('inspOnlyForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('existingAssetFile');
+      if (!fileInput.files.length) return alert('Please select an existing asset file.');
+
+      const btn = this.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = '⏳ Working…';
+
+      const reader = new FileReader();
+      reader.onload = async function (ev) {
+        try {
+          const wb = XLSX.read(ev.target.result, { type: 'binary' });
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+          const hdr = rows[0] || [];
+          const nc = hdr.findIndex(h => /Asset Name\*/i.test(h));
+          const sc = hdr.findIndex(h => /Segment\*/i.test(h));
+          if (nc === -1 || sc === -1) return alert('The file must contain "Asset Name*" and "Segment*" columns.');
+
+          const assets = rows.slice(1)
+            .filter(r => r[nc] && String(r[nc]).trim())
+            .map(r => ({ assetName: String(r[nc]).trim(), segment: String(r[sc] || '').trim() }));
+          if (!assets.length) return alert('No asset records found.');
+
+          const prefix = assets[0].assetName.split('-')[0] || 'Asset';
+          const YEARS = 10, surveyDates = buildSurveyDates(YEARS);
+          const total = YEARS * assets.length;
+          const inspRows = []; let cnt = 0;
+
+          showProgress(2, `Generating ${total.toLocaleString()} inspection records…`); await yieldUI();
+
+          for (let yr = 0; yr < YEARS; yr++) {
+            const sd = surveyDates[yr];
+            const sn = `${pick(SURVEY_PFX)}-${sd.getFullYear()}`;
+            const tech = pick(TECH_NAMES);
+            const latest = yr === YEARS - 1;
+
+            for (const a of assets) {
+              inspRows.push([
+                a.segment, a.assetName,
+                ...INSP_MEAS.map(c => getMeasVal(c)),
+                formatDate(sd), sn, tech,
+                generateInspComment(a.segment, a.assetName, sd.getFullYear(), latest)
+              ]);
+              cnt++;
+              if (cnt % 2000 === 0) { showProgress(2 + (cnt / total) * 85, `${cnt.toLocaleString()} of ${total.toLocaleString()}…`); await yieldUI(); }
+            }
+          }
+
+          showProgress(90, 'Writing XLSX…'); await yieldUI();
+          showPreviewTable('previewInspTable', INSP_HEADER, inspRows.slice(0, 10));
+          document.getElementById('inspBadge').textContent = `${inspRows.length.toLocaleString()} records (${YEARS} yrs × ${assets.length.toLocaleString()} assets)`;
+          switchTab('inspection');
+          downloadXlsx([INSP_HEADER, ...inspRows], 'Inspections', `${prefix}_Inspection_Import.xlsx`, 'downloadInspLink');
+          showProgress(100, 'Done!'); await yieldUI(); hideProgress();
+          setStatus(`✅ Generated ${inspRows.length.toLocaleString()} inspection records for ${assets.length.toLocaleString()} assets — ${YEARS} annual surveys, latest within last 15 months.`);
+
+        } catch (err) {
+          alert('Error: ' + err.message); hideProgress();
+        } finally {
+          btn.disabled = false; btn.textContent = '⚙ Generate Inspection Records';
+        }
+      };
+      reader.readAsBinaryString(fileInput.files[0]);
+    });
+  </script>
 </body>
+
 </html>
