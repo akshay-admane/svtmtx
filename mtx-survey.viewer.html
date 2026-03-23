@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTX Survey Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0d0f14;--surface:#141720;--surface2:#1c2030;--border:#252a3a;--border2:#2e3448;
+    --text:#e2e6f0;--text2:#8890aa;--text3:#545e7a;--accent:#4a9eff;--green:#22c55e;
+    --red:#ef4444;--yellow:#f59e0b;--teal:#14b8a6;--purple:#a78bfa;--orange:#fb923c;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;}
+
+  /* DROP SCREEN */
+  #dropScreen{
+    position:fixed;inset:0;z-index:200;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+    background:radial-gradient(ellipse at 50% 55%,#0f1622 0%,#0d0f14 70%);
+  }
+  .drop-logo{font-family:var(--mono);font-size:12px;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;}
+  .drop-box{
+    width:460px;max-width:92vw;border:2px dashed var(--border2);border-radius:16px;
+    padding:48px 36px;text-align:center;cursor:pointer;position:relative;
+    transition:border-color 0.2s,background 0.2s;
+  }
+  .drop-box:hover,.drop-box.drag-over{border-color:var(--accent);background:rgba(74,158,255,0.04);}
+  .drop-icon{font-size:44px;margin-bottom:18px;opacity:0.45;}
+  .drop-title{font-size:20px;font-weight:600;margin-bottom:8px;}
+  .drop-sub{font-size:12px;color:var(--text3);line-height:1.8;}
+  .drop-ext{font-family:var(--mono);color:var(--accent);}
+  #fileInput{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .drop-hint{font-size:11px;color:var(--text3);font-family:var(--mono);}
+  #dropError{color:var(--red);font-size:12px;margin-top:12px;display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:8px 12px;}
+
+  /* TOP BAR */
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:11px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+  .topbar-logo{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;white-space:nowrap;}
+  .topbar-div{width:1px;height:18px;background:var(--border2);flex-shrink:0;}
+  .topbar-title{font-weight:600;font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .topbar-meta{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+  .reload-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:4px 10px;color:var(--text2);font-size:11px;cursor:pointer;font-family:var(--sans);transition:all 0.15s;white-space:nowrap;}
+  .reload-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:0.04em;font-family:var(--mono);}
+  .badge-high{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+  .badge-status{background:rgba(74,158,255,0.1);color:var(--accent);border:1px solid rgba(74,158,255,0.25);}
+  .badge-type{background:rgba(20,184,166,0.1);color:var(--teal);border:1px solid rgba(20,184,166,0.25);}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+  .dot-red{background:var(--red);}
+  .dot-blue{background:var(--accent);box-shadow:0 0 5px var(--accent);}
+  .dot-teal{background:var(--teal);}
+
+  .survey-header{padding:16px 20px 0;display:flex;flex-wrap:wrap;gap:10px;max-width:1440px;margin:0 auto;}
+  .meta-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:130px;}
+  .meta-label{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;}
+  .meta-value{font-size:13px;font-weight:500;}
+
+  .controls{padding:12px 20px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:1440px;margin:0 auto;}
+  .search-box{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;color:var(--text);font-family:var(--sans);font-size:12px;width:220px;outline:none;transition:border-color 0.15s;}
+  .search-box:focus{border-color:var(--accent);}
+  .search-box::placeholder{color:var(--text3);}
+  .filter-btn{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:6px 11px;color:var(--text2);font-size:12px;cursor:pointer;transition:all 0.15s;font-family:var(--sans);}
+  .filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,0.06);}
+  .stats-row{margin-left:auto;display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:11px;}
+  .stat{display:flex;gap:4px;align-items:center;}
+  .stat-count{font-weight:600;}
+  .stat-count.green{color:var(--green);}
+  .stat-count.red{color:var(--red);}
+  .stat-label{color:var(--text3);}
+
+  .main{max-width:1440px;margin:0 auto;padding:0 20px 40px;}
+
+  .asset-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;}
+  .asset-card.has-fail{border-left:3px solid var(--red);}
+  .asset-card.all-pass{border-left:3px solid var(--green);}
+  .asset-header{padding:13px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;transition:background 0.12s;}
+  .asset-header:hover{background:rgba(255,255,255,0.02);}
+  .asset-order{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text3);background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;min-width:26px;text-align:center;}
+  .asset-name{font-weight:600;font-size:13px;}
+  .asset-type{font-size:11px;color:var(--text3);}
+  .asset-location{font-size:11px;color:var(--text2);}
+  .asset-seg{font-family:var(--mono);font-size:10px;color:var(--teal);background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.2);padding:2px 7px;border-radius:4px;white-space:nowrap;}
+  .spacer{flex:1;}
+  .compliance-summary{display:flex;gap:5px;}
+  .cs-pass,.cs-fail{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;}
+  .cs-pass{background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.2);}
+  .cs-fail{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid rgba(239,68,68,0.2);}
+  .chevron{color:var(--text3);transition:transform 0.2s;font-size:10px;margin-left:4px;}
+  .chevron.open{transform:rotate(90deg);}
+
+  .asset-meta-row{padding:0 16px 11px;display:flex;gap:18px;flex-wrap:wrap;border-bottom:1px solid var(--border);}
+  .asset-meta-item{display:flex;flex-direction:column;gap:1px;}
+  .ami-label{font-size:10px;color:var(--text3);font-family:var(--mono);}
+  .ami-val{font-size:11px;color:var(--text2);}
+
+  .measurements-wrap{display:none;}
+  .measurements-wrap.open{display:block;}
+  .meas-table{width:100%;border-collapse:collapse;}
+  .meas-table thead tr{background:var(--surface2);border-bottom:1px solid var(--border2);}
+  .meas-table thead th{padding:7px 11px;text-align:left;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;white-space:nowrap;}
+  .meas-table tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
+  .meas-table tbody tr:hover{background:rgba(255,255,255,0.02);}
+  .meas-table tbody tr:last-child{border-bottom:none;}
+  .meas-table td{padding:8px 11px;vertical-align:middle;}
+  .order-num{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text3);background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;display:inline-block;}
+  .mtype{font-weight:500;font-size:12px;}
+  .msource{font-size:11px;color:var(--text2);}
+  .munit{font-family:var(--mono);font-size:10px;color:var(--text3);}
+  .compliance-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:var(--mono);}
+  .cp-pass{background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.2);}
+  .cp-fail{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid rgba(239,68,68,0.2);}
+  .cp-na{background:rgba(84,94,122,0.2);color:var(--text3);border:1px solid var(--border2);}
+  .threshold-val{font-family:var(--mono);font-size:11px;color:var(--text2);}
+  .threshold-empty{color:var(--text3);font-size:11px;}
+  .criteria-tag{font-family:var(--mono);font-size:10px;color:var(--yellow);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);padding:1px 5px;border-radius:3px;}
+  .acdc-tag{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:3px;}
+  .acdc-dc{background:rgba(74,158,255,0.08);color:var(--accent);border:1px solid rgba(74,158,255,0.2);}
+  .acdc-ac{background:rgba(167,139,250,0.08);color:var(--purple);border:1px solid rgba(167,139,250,0.2);}
+  .acdc-na{background:rgba(84,94,122,0.15);color:var(--text3);border:1px solid var(--border2);}
+  .oncycle-tag{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:3px;}
+  .oncycle-on{background:rgba(20,184,166,0.08);color:var(--teal);border:1px solid rgba(20,184,166,0.2);}
+  .oncycle-off{background:rgba(251,146,60,0.08);color:var(--orange);border:1px solid rgba(251,146,60,0.2);}
+  .oncycle-both{background:rgba(84,94,122,0.15);color:var(--text3);border:1px solid var(--border2);}
+  .historical-mini{display:flex;gap:3px;align-items:flex-end;height:24px;}
+  .hist-bar{width:5px;border-radius:1px;background:var(--border2);min-height:2px;}
+  .metadata-chips{display:flex;flex-direction:column;gap:2px;}
+  .md-chip{font-size:10px;font-family:var(--mono);color:var(--text3);white-space:nowrap;}
+  .md-key{color:var(--text2);}
+  .md-val{color:var(--yellow);}
+  .img-row td{background:rgba(84,94,122,0.04);}
+  .empty-state{text-align:center;padding:60px;color:var(--text3);font-size:14px;}
+  ::-webkit-scrollbar{width:5px;height:5px;}
+  ::-webkit-scrollbar-track{background:var(--surface);}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  #appScreen{display:none;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .asset-card{animation:fadeIn 0.25s ease both;}
+</style>
+</head>
+<body>
+
+<!-- ═══ DROP SCREEN ═══ -->
+<div id="dropScreen">
+  <div class="drop-logo">⬡ MTX Survey Viewer</div>
+  <div class="drop-box" id="dropBox">
+    <input type="file" id="fileInput" accept=".mtx,.json">
+    <div class="drop-icon">📂</div>
+    <div class="drop-title">Drop your .mtx file here</div>
+    <div class="drop-sub">
+      Or <strong>click anywhere in this box</strong> to browse your computer.<br>
+      Accepts <span class="drop-ext">.mtx</span> and <span class="drop-ext">.json</span> survey files.
+    </div>
+    <div id="dropError">⚠ Could not parse file — make sure it's a valid MTX/JSON survey.</div>
+  </div>
+  <div class="drop-hint">Everything is processed locally in your browser. Nothing is uploaded.</div>
+</div>
+
+<!-- ═══ APP SCREEN ═══ -->
+<div id="appScreen">
+  <div class="topbar">
+    <div class="topbar-logo">⬡ MTX</div>
+    <div class="topbar-div"></div>
+    <div class="topbar-title" id="surveyTitle">—</div>
+    <div class="topbar-meta" id="topbarMeta"></div>
+    <button class="reload-btn" onclick="resetToDropScreen()">⟳ Load Another File</button>
+  </div>
+  <div class="survey-header" id="surveyHeader"></div>
+  <div class="controls">
+    <input class="search-box" id="searchBox" placeholder="Search assets, measurement types…" oninput="renderAssets()">
+    <button class="filter-btn active" id="filterAll"  onclick="setFilter('all')">All</button>
+    <button class="filter-btn"        id="filterFail" onclick="setFilter('fail')">Non-Compliant</button>
+    <button class="filter-btn"        id="filterPass" onclick="setFilter('pass')">Compliant</button>
+    <button class="filter-btn"        id="filterImg"  onclick="setFilter('img')">Images Only</button>
+    <button class="filter-btn" onclick="toggleAll(true)">Expand All</button>
+    <button class="filter-btn" onclick="toggleAll(false)">Collapse All</button>
+    <div class="stats-row" id="statsRow"></div>
+  </div>
+  <div class="main" id="mainContent"></div>
+</div>
+
+<script>
+let SURVEY = null, currentFilter = 'all', expandedAssets = new Set();
+
+/* ── FILE LOADING ──────────────────────── */
+const dropBox = document.getElementById('dropBox');
+const fileInput = document.getElementById('fileInput');
+
+dropBox.addEventListener('dragover', e => { e.preventDefault(); dropBox.classList.add('drag-over'); });
+dropBox.addEventListener('dragleave', () => dropBox.classList.remove('drag-over'));
+dropBox.addEventListener('drop', e => { e.preventDefault(); dropBox.classList.remove('drag-over'); if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); });
+
+function loadFile(file) {
+  const errEl = document.getElementById('dropError');
+  errEl.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(!data.assets || !Array.isArray(data.assets)) throw new Error('No "assets" array found in this file.');
+      SURVEY = data;
+      expandedAssets = new Set();
+      currentFilter = 'all';
+      document.getElementById('dropScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display = 'block';
+      initApp();
+    } catch(ex) {
+      errEl.style.display = 'block';
+      errEl.textContent = '⚠ ' + (ex.message || 'Invalid file format');
+    }
+  };
+  reader.onerror = () => { document.getElementById('dropError').style.display = 'block'; };
+  reader.readAsText(file);
+}
+
+function resetToDropScreen() {
+  SURVEY = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('dropScreen').style.display = 'flex';
+  document.getElementById('fileInput').value = '';
+}
+
+/* ── INIT ──────────────────────────────── */
+function initApp() {
+  const d = SURVEY;
+  document.getElementById('surveyTitle').textContent = d.surveyName || 'Survey';
+  document.getElementById('topbarMeta').innerHTML = `
+    <span class="badge badge-high"><span class="dot dot-red"></span>${d.surveyPriority||''}</span>
+    <span class="badge badge-status"><span class="dot dot-blue"></span>${d.surveyStatus||''}</span>
+    <span class="badge badge-type"><span class="dot dot-teal"></span>${d.dataCollectionType||''}</span>`;
+  const fmtDate = s => s ? new Date(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+  document.getElementById('surveyHeader').innerHTML = [
+    ['Survey ID',(d.surveyId||'').slice(-8)],['Assigned To',d.assignedTo||'—'],
+    ['Due Date',fmtDate(d.dueDate)],['Survey Type',d.surveyType||'—'],
+    ['Frequency',d.surveyFrequencyType||'—'],['Total Assets',(d.assets||[]).length],
+  ].map(([l,v])=>`<div class="meta-card"><div class="meta-label">${l}</div><div class="meta-value">${v}</div></div>`).join('');
+  ['All','Fail','Pass','Img'].forEach(x => { const el=document.getElementById('filter'+x); if(el) el.classList.remove('active'); });
+  document.getElementById('filterAll').classList.add('active');
+  document.getElementById('searchBox').value = '';
+  renderAssets();
+}
+
+/* ── RENDER ────────────────────────────── */
+function setFilter(f) {
+  currentFilter = f;
+  ['All','Fail','Pass','Img'].forEach(x => { const el=document.getElementById('filter'+x); if(el) el.classList.toggle('active',f===x.toLowerCase()); });
+  renderAssets();
+}
+function toggleAll(open) {
+  (SURVEY.assets||[]).forEach(a => open ? expandedAssets.add(a.assetId) : expandedAssets.delete(a.assetId));
+  renderAssets();
+}
+
+function renderAssets() {
+  if(!SURVEY) return;
+  const query = (document.getElementById('searchBox')?.value||'').toLowerCase();
+  const assets = (SURVEY.assets||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0));
+  let totalPass=0,totalFail=0,shown=0;
+  const cards=[];
+  for(const asset of assets){
+    const measurements=(asset.assetMeasurementCriterias||[]).slice().sort((a,b)=>(a.measurementOrder||0)-(b.measurementOrder||0));
+    const passCnt=measurements.filter(m=>m.compliance===true).length;
+    const failCnt=measurements.filter(m=>m.compliance===false).length;
+    totalPass+=passCnt; totalFail+=failCnt;
+    if(currentFilter==='fail'&&failCnt===0) continue;
+    if(currentFilter==='pass'&&passCnt===0) continue;
+    if(currentFilter==='img'&&!measurements.some(m=>m.measurementType==='Measurement Image')) continue;
+    if(query){
+      const blob=[asset.assetName,asset.assetType,asset.locationDescription,asset.level4Value,
+        ...measurements.map(m=>m.measurementType+' '+m.measurementSource)].join(' ').toLowerCase();
+      if(!blob.includes(query)) continue;
+    }
+    shown++;
+    const isOpen=expandedAssets.has(asset.assetId);
+    const openCls=isOpen?'open':'';
+    cards.push(`
+      <div class="asset-card ${failCnt===0?'all-pass':'has-fail'}" style="animation-delay:${(shown-1)*0.025}s" id="ac-${asset.assetId}">
+        <div class="asset-header" onclick="toggleAsset('${asset.assetId}')">
+          <span class="asset-order">${asset.order||'?'}</span>
+          <span class="asset-name">${esc(asset.assetName)}</span>
+          <span class="asset-type">${esc(asset.assetType)}</span>
+          <span class="asset-seg">${esc(asset.level4Value||'')}</span>
+          <span class="asset-location">${esc(asset.locationDescription||'')}</span>
+          <span class="spacer"></span>
+          <div class="compliance-summary"><span class="cs-pass">✓ ${passCnt}</span><span class="cs-fail">✗ ${failCnt}</span></div>
+          <span class="chevron ${openCls}">▶</span>
+        </div>
+        <div class="asset-meta-row">
+          ${[['L1',asset.level1Value],['L2',asset.level2Value],['L3',asset.level3Value],['Facility',asset.level4Value],
+            ['Lat/Lon',(asset.latitude||'—') + ', ' + (asset.longitude||'—')],
+            ['Mileage',asset.spatialReference1],['Station',asset.spatialReference2],['Shot#',asset.spatialReference3]
+          ].map(function(pair){var l=pair[0],v=pair[1];return '<div class="asset-meta-item"><span class="ami-label">'+l+'</span><span class="ami-val">'+esc(String(v||'—'))+'</span></div>';}).join('')}
+        </div>
+        <div class="measurements-wrap ${openCls}" id="mw-${asset.assetId}">${renderTable(measurements)}</div>
+      </div>`);
+  }
+  document.getElementById('mainContent').innerHTML = cards.length ? cards.join('') : `<div class="empty-state">No assets match the current filter.</div>`;
+  document.getElementById('statsRow').innerHTML=`
+    <div class="stat"><span class="stat-count">${shown}</span><span class="stat-label">assets</span></div>
+    <div class="stat"><span class="stat-count green">${totalPass}</span><span class="stat-label">pass</span></div>
+    <div class="stat"><span class="stat-count red">${totalFail}</span><span class="stat-label">fail</span></div>`;
+}
+
+function renderTable(measurements){
+  if(!measurements.length) return '<div style="padding:18px;color:var(--text3);text-align:center">No measurements</div>';
+  const rows=measurements.map(m=>{
+    const isImg=m.measurementType==='Measurement Image';
+    const comp=isImg?null:m.compliance;
+    const compHtml=comp===true?'<span class="compliance-pill cp-pass">✓ PASS</span>':comp===false?'<span class="compliance-pill cp-fail">✗ FAIL</span>':'<span class="compliance-pill cp-na">IMAGE</span>';
+    const hasT=m.threshold!==''&&m.threshold!=null;
+    var opPrefix = m.measurementOperator ? '<span style="font-size:9px;color:var(--text3)">'+esc(m.measurementOperator)+'</span> ' : '';
+    const threshHtml = hasT
+      ? '<span class="threshold-val">'+opPrefix+esc(String(m.threshold))+' <span class="munit">'+esc(m.unit||'')+'</span></span>'
+      : m.criteria ? '<span class="criteria-tag">'+esc(m.criteria)+'</span>'
+      : '<span class="threshold-empty">—</span>';
+    const acdc=m.acDcValue||'';
+    const acdcHtml=acdc==='DC'?'<span class="acdc-tag acdc-dc">DC</span>':acdc==='AC'?'<span class="acdc-tag acdc-ac">AC</span>':'<span class="acdc-tag acdc-na">N/A</span>';
+    const oc=m.onCycle;
+    const ocHtml=oc===1?'<span class="oncycle-tag oncycle-on">ON</span>':oc===0?'<span class="oncycle-tag oncycle-off">OFF</span>':'<span class="oncycle-tag oncycle-both">—</span>';
+    const hist=(m.historicalData||[]).filter(h=>h.value!=null).map(h=>parseFloat(h.value)).filter(v=>!isNaN(v));
+    const mdHtml=(m.associatedMetadata||[]).map(md=>`<div class="md-chip"><span class="md-key">${esc(md.key)}</span>: <span class="md-val">${esc(String(md.value))} ${esc(md.unit||'')}</span></div>`).join('')||'<span class="md-chip">—</span>';
+    return `<tr class="${isImg?'img-row':''}">
+      <td><span class="order-num">${m.measurementOrder||'?'}</span></td>
+      <td><div class="mtype">${esc(m.measurementType)}</div><div class="msource">${esc(m.measurementSource||'')}</div></td>
+      <td>${compHtml}</td><td>${threshHtml}</td><td>${acdcHtml}</td><td>${ocHtml}</td>
+      <td><div class="metadata-chips">${mdHtml}</div></td>
+      <td>${miniChart(hist)}</td>
+    </tr>`;
+  }).join('');
+  return `<table class="meas-table"><thead><tr><th>#</th><th>Type / Source</th><th>Compliance</th><th>Threshold / Criteria</th><th>AC/DC</th><th>Cycle</th><th>Metadata</th><th>History</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function miniChart(values){
+  if(!values.length) return '<span style="color:var(--text3);font-size:10px">—</span>';
+  const min=Math.min(...values),max=Math.max(...values),range=max-min||1;
+  const bars=values.map((v,i)=>{const h=Math.max(2,Math.round(((v-min)/range)*22));const c=i===values.length-1?'var(--accent)':'var(--border2)';return `<div class="hist-bar" title="${v}" style="height:${h}px;background:${c}"></div>`;}).join('');
+  return `<div class="historical-mini">${bars}</div><span style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-left:4px">${values[values.length-1]??''}</span>`;
+}
+
+function toggleAsset(id){
+  if(expandedAssets.has(id)) expandedAssets.delete(id); else expandedAssets.add(id);
+  document.getElementById('mw-'+id)?.classList.toggle('open');
+  document.querySelector(`#ac-${id} .chevron`)?.classList.toggle('open');
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+</script>
+</body>
+</html>
