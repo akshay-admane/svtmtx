@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>FILL CSV</title>
+<title>CSV Tool</title>
 
 <!-- Leaflet (much lighter than OpenLayers) -->
 <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -773,7 +773,7 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
 
       // Hierarchy context — null if no company selected (fallback to random)
       const hierCtx = getHierarchyContext();
-      // Total combinations = N_l3 × 2 segments each
+      // Total combinations = N_l3 × 3 segments each
       const hierCombos = hierCtx
         ? hierCtx.flatMap(([l3Name, l3Data]) =>
             l3Data.segments.map(seg => ({ l3Name, seg }))
@@ -785,6 +785,7 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
       const FALLBACK_SEGS = [
         { l3Name: null, seg: { name: `Seg- ${creationMonth} 1`, type: 'Mainline' } },
         { l3Name: null, seg: { name: `Seg- ${creationMonth} 2`, type: 'Spur'     } },
+        { l3Name: null, seg: { name: `Seg- ${creationMonth} 3`, type: 'Meter Station' } },
       ];
       const combos = hierCombos || FALLBACK_SEGS;
 
@@ -1044,8 +1045,9 @@ document.getElementById('inspOnlyForm').addEventListener('submit', async functio
          "level1Value": "Indian Surveys",
          "level2Value": "Maharashtra",
          "segments": [
-           {"name":"Seg- April 1","type":"Mainline"},
-           {"name":"Seg- April 2","type":"Spur"}
+           {"name":"Seg- South-East 1","type":"Mainline"},
+           {"name":"Seg- South-East 2","type":"Spur"},
+           {"name":"Seg- South-East 3","type":"Mainline"}
          ]
        },
        ...
@@ -1105,9 +1107,11 @@ function parseAndSaveHierarchy() {
       existing[l3] = {
         level1Value : item.level1Value || '',
         level2Value : item.level2Value || '',
+        // 3 segments named after their level3 value → unique per level3, never repeated elsewhere
         segments    : [
-          { name: `Seg- ${month} 1`, type: 'Mainline' },
-          { name: `Seg- ${month} 2`, type: 'Spur'     }
+          { name: `Seg- ${l3} 1`, type: 'Mainline' },
+          { name: `Seg- ${l3} 2`, type: 'Spur'     },
+          { name: `Seg- ${l3} 3`, type: 'Mainline' }
         ]
       };
       addedCount++;
