@@ -288,28 +288,45 @@ function createCheckbox(label,checked,onChange){
 
 // ---------------- MUTATION BUILDER ----------------
 
-function generateMutation(assetType,assetTypeId,template){
+function generateMutation(assetType, assetTypeId, template){
 
-  const pcId=pcIdInput.value || 'YOUR_PC_ID';
+  const pcId = pcIdInput.value || 'YOUR_PC_ID';
 
-  const templateFields={};
+  const templateFields = {};
   Object.keys(globalSelection.templateFields).forEach(k=>{
-    if(globalSelection.templateFields[k]) templateFields[k]=template[k];
+    if(globalSelection.templateFields[k]) templateFields[k] = template[k];
   });
 
-  const measurements=(template.measurementTypes || []).map(m=>{
-    const obj={};
+  const measurements = (template.measurementTypes || []).map(m=>{
+    const obj = {};
 
     Object.keys(globalSelection.measurementFields).forEach(k=>{
-      if(globalSelection.measurementFields[k]) obj[k]=m[k];
+      if(globalSelection.measurementFields[k]) obj[k] = m[k];
     });
 
     Object.keys(globalSelection.inspectionFields).forEach(k=>{
-      if(globalSelection.inspectionFields[k]) obj[k]=m[k];
+      if(globalSelection.inspectionFields[k]) obj[k] = m[k];
     });
 
     return obj;
   });
+
+  // 🔥 Build measurement array properly
+  const measurementBlock = `
+measurementTypeInputs: [
+${measurements.map(m => buildGraphQLObject(m, 10)).join(",\n")}
+]
+`;
+
+  // 🔥 Build template object WITHOUT measurement first
+  const templateBlock = `
+{
+${Object.entries(templateFields)
+  .map(([k,v]) => `  ${k}: ${formatValue(v)}`)
+  .join(",\n")},
+  ${measurementBlock}
+}
+`;
 
   return `
 mutation CreateTemplate {
@@ -319,22 +336,13 @@ mutation CreateTemplate {
       assetTypeInputs: {
         assetType: "${assetType}",
         assetTypeId: "${assetTypeId}",
-        assetTypeTemplateInputs: ${buildGraphQLObject({
-          ...templateFields,
-          measurementTypeInputs: null
-        })}
+        assetTypeTemplateInputs: ${templateBlock}
       }
     }
   ) {
     __typename
   }
-}
-
-# measurementTypeInputs:
-[
-${measurements.map(m => buildGraphQLObject(m,6)).join(",\n")}
-]
-`;
+}`;
 }
 
 </script>
