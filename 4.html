@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>format api</title>
+<title>AppSync Mutation Generator</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
@@ -46,6 +46,7 @@
 let assetData = {};
 let currentAssetType = null;
 
+// GLOBAL FIELD CONTROL
 let globalSelection = {
 
   templateFields:{
@@ -84,7 +85,26 @@ const pcIdInput = document.getElementById('pcIdInput');
 const assetTypeConfig = document.getElementById('assetTypeConfig');
 
 
-// ---------------- GLOBAL CHECKBOX TREE ----------------
+// ---------------- GRAPHQL FORMATTER ----------------
+
+function formatValue(v){
+  if (typeof v === "string") return `"${v}"`;
+  if (typeof v === "number") return v;
+  if (typeof v === "boolean") return v;
+  if (v === null || v === undefined) return null;
+  return `"${v}"`;
+}
+
+function buildGraphQLObject(obj, indent=2){
+  const space = " ".repeat(indent);
+  return `{\n${Object.entries(obj)
+    .filter(([_,v]) => v !== null && v !== undefined)
+    .map(([k,v]) => `${space}${k}: ${formatValue(v)}`)
+    .join(",\n")}\n${" ".repeat(indent-2)}}`;
+}
+
+
+// ---------------- GLOBAL CHECKBOX ----------------
 
 function renderGlobalCheckboxTree(){
 
@@ -100,8 +120,8 @@ function renderGlobalCheckboxTree(){
   );
 
   globalCheckboxTree.appendChild(createGroup("Template Fields",globalSelection.templateFields));
-  globalCheckboxTree.appendChild(createGroup("Measurement Object Fields",globalSelection.measurementFields));
-  globalCheckboxTree.appendChild(createGroup("Inspection / Exception Fields",globalSelection.inspectionFields));
+  globalCheckboxTree.appendChild(createGroup("Measurement Fields",globalSelection.measurementFields));
+  globalCheckboxTree.appendChild(createGroup("Inspection Fields",globalSelection.inspectionFields));
 }
 
 function createGroup(title,obj){
@@ -266,7 +286,7 @@ function createCheckbox(label,checked,onChange){
 }
 
 
-// ---------------- SAFE MUTATION BUILDER ----------------
+// ---------------- MUTATION BUILDER ----------------
 
 function generateMutation(assetType,assetTypeId,template){
 
@@ -299,16 +319,22 @@ mutation CreateTemplate {
       assetTypeInputs: {
         assetType: "${assetType}",
         assetTypeId: "${assetTypeId}",
-        assetTypeTemplateInputs: {
-          ${Object.entries(templateFields).map(([k,v])=>`${k}: "${v}"`).join(",\n")}
-          measurementTypeInputs: ${JSON.stringify(measurements,null,4)}
-        }
+        assetTypeTemplateInputs: ${buildGraphQLObject({
+          ...templateFields,
+          measurementTypeInputs: null
+        })}
       }
     }
   ) {
     __typename
   }
-}`;
+}
+
+# measurementTypeInputs:
+[
+${measurements.map(m => buildGraphQLObject(m,6)).join(",\n")}
+]
+`;
 }
 
 </script>
