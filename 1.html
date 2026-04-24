@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CSV Tool</title>
+<title>Pipeline Asset Import Tool</title>
 
 <!-- Leaflet (much lighter than OpenLayers) -->
 <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -100,6 +100,21 @@ th{background:#f0f0f0;}
 .hier-sm-btn.del:hover{background:#c0392b;}
 .hier-active-badge{display:inline-block;background:#27ae60;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:8px;}
 
+
+/* Manual Entry form */
+.manual-l3-block{border:1px solid #dde3f5;border-radius:5px;padding:10px 12px;margin-bottom:10px;background:#fafbff;position:relative;}
+.manual-l3-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.manual-l3-name{flex:1;padding:6px 10px;border:1px solid #ccc;border-radius:3px;font-size:13px;font-weight:bold;}
+.manual-seg-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+.manual-seg-input{flex:1;padding:5px 9px;border:1px solid #ccc;border-radius:3px;font-size:13px;}
+.manual-seg-type{padding:5px 8px;border:1px solid #ccc;border-radius:3px;font-size:12px;background:#fff;}
+.manual-rm-btn{padding:3px 9px;background:#e74c3c;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:13px;line-height:1;}
+.manual-rm-btn:hover{background:#c0392b;}
+.manual-add-seg{padding:4px 10px;background:#3498db;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;margin-top:2px;}
+.manual-add-seg:hover{background:#2980b9;}
+.manual-rm-l3{position:absolute;top:8px;right:8px;padding:3px 8px;background:#e74c3c;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;}
+.manual-rm-l3:hover{background:#c0392b;}
+
 </style>
 </head>
 <body>
@@ -122,6 +137,7 @@ th{background:#f0f0f0;}
       <!-- ── Tab bar ── -->
       <div class="hier-tabs">
         <button class="hier-tab active" id="htabParse"  onclick="switchHierTab('parse')">📥 Parse API</button>
+        <button class="hier-tab"        id="htabManual" onclick="switchHierTab('manual')">✏ Manual Entry</button>
         <button class="hier-tab"        id="htabGist"   onclick="switchHierTab('gist')">☁ GitHub Gist Sync</button>
         <button class="hier-tab"        id="htabBackup" onclick="switchHierTab('backup')">💾 Export / Import</button>
       </div>
@@ -138,6 +154,28 @@ th{background:#f0f0f0;}
           <button class="hier-btn parse" onclick="parseAndSaveHierarchy()">⚙ Parse &amp; Save Level 3 Values</button>
           <button class="hier-btn clear" onclick="document.getElementById('hierJsonInput').value=''">✕ Clear</button>
         </div>
+      </div>
+
+      <!-- ── Manual Entry tab ── -->
+      <div id="htabManualPanel" class="hier-tabpanel" style="display:none">
+        <p style="font-size:12px;color:#666;margin:8px 0 10px;">
+          Add Level 3 values and their segments manually — for companies not yet available in the API or Gist.
+        </p>
+
+        <label style="font-size:13px;margin-top:0;">Company Name:</label>
+        <div class="hier-row" style="margin-bottom:10px;">
+          <input class="hier-input" type="text" id="manualCompanyInput"
+                 placeholder="e.g. Indian Surveys" style="max-width:260px;"/>
+          <button class="hier-btn parse" onclick="addManualL3Block()" style="margin-top:0;">＋ Add Level 3 Value</button>
+        </div>
+
+        <div id="manualL3Container"></div>
+
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+          <button class="hier-btn parse" onclick="saveManualHierarchy()">💾 Save to Company Hierarchy</button>
+          <button class="hier-btn clear" onclick="clearManualForm()">✕ Clear Form</button>
+        </div>
+        <div class="hier-status" id="manualStatus" style="margin-top:6px;min-height:16px;font-size:12px;"></div>
       </div>
 
       <!-- ── Gist Sync tab ── -->
@@ -201,7 +239,29 @@ th{background:#f0f0f0;}
         <span id="sr2Hint" style="font-size:12px;color:#888;">Off — ESN / decimal</span>
       </div>
 
-      <button type="submit" class="btn" id="generateBtn">⚙ Generate Asset &amp; Inspection Records</button>
+      <!-- Chunk size selectors -->
+      <div style="margin-top:14px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;">
+        <div>
+          <label for="assetChunkSel" style="margin-top:0;font-size:13px;">Assets per file:</label>
+          <select id="assetChunkSel" style="display:block;margin-top:4px;padding:6px 10px;border:1px solid #ccc;border-radius:3px;font-size:13px;min-width:180px;">
+            <option value="0">Single file — all in one</option>
+            <option value="1000" selected>1,000 per file</option>
+            <option value="3000">3,000 per file</option>
+            <option value="5000">5,000 per file</option>
+          </select>
+        </div>
+        <div>
+          <label for="inspChunkSel" style="margin-top:0;font-size:13px;">Inspection records per file:</label>
+          <select id="inspChunkSel" style="display:block;margin-top:4px;padding:6px 10px;border:1px solid #ccc;border-radius:3px;font-size:13px;min-width:200px;">
+            <option value="0">Single file — all in one</option>
+            <option value="1000">1,000 per file</option>
+            <option value="3000">3,000 per file</option>
+            <option value="10000" selected>10,000 per file</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="generateBtn" style="margin-top:14px;">⚙ Generate Asset &amp; Inspection Records</button>
     </form>
 
     <div class="map-toolbar">
@@ -251,9 +311,8 @@ th{background:#f0f0f0;}
   </div>
 
   <!-- Downloads -->
-  <div class="download-row">
-    <a id="downloadLink"     class="btn green  download-link">⬇ Download Asset Import File</a>
-    <a id="downloadInspLink" class="btn orange download-link">⬇ Download Inspection Import File</a>
+  <div id="downloadContainer" style="margin-top:12px;display:none;">
+    <div id="downloadRow" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
   </div>
 </div>
 
@@ -347,7 +406,16 @@ function generateAssetComment(seg, name) {
   const t = ASSET_COMMENT_TPLS[randInt(0,ASSET_COMMENT_TPLS.length-1)];
   return t(seg, name, getLocation());
 }
-function generateInspComment(seg, name, year, isLatest) {
+function generateInspComment(seg, name, year, isLatest, pass=true) {
+  if (!pass) {
+    const failNotes = [
+      `CP inspection ${year}. Asset ${name} (${seg}) — one or more readings outside threshold. Flagged for review.`,
+      `Annual survey ${year}. Segment ${seg} — ${name} recorded readings in exception status. Corrective action may be required.`,
+      `${name} in ${seg} — ${year} inspection identified threshold exceedance. Asset added to exception list.`,
+      `CP monitoring ${year}. ${name} (${seg}) — protection levels below acceptable criterion. Engineering review recommended.`,
+    ];
+    return pick(failNotes);
+  }
   if (isLatest) return `Latest annual survey ${year}. Asset ${name} in segment ${seg} — all CP readings within specification. No corrective action required.`;
   const t = INSP_COMMENT_NOTES[randInt(0,INSP_COMMENT_NOTES.length-1)];
   return t(seg, name, year);
@@ -427,25 +495,47 @@ function generateAssetMeta() {
    Accepts the asset's fixed meta (couponM2, shuntFactor) so that
    current density is always derived correctly from those values.
    Formula: density = (V_shunt × shuntFactor) / couponM2            */
-function generateCPReadings(couponM2, shuntFactor) {
+function generateCPReadings(couponM2, shuntFactor, passCriteria=true) {
   // Use defaults if called without asset meta (e.g. Mode 2 without meta columns)
   if (!couponM2)    couponM2    = COUPON_SIZES_M2[1];   // default 25 cm²
   if (!shuntFactor) shuntFactor = SHUNT_FACTORS_AV[1];  // default 0.1 A/V (10Ω)
 
   // ── Helper: derive density from a generated shunt voltage ──
-  // V_shunt is the measured voltage across the shunt in the field (volts)
-  // Realistic range: 0.1 mV – 100 mV (0.0001 – 0.1 V) for coupon monitoring
   function densityFromVoltage(vMin=0.0001, vMax=0.1) {
-    const vShunt  = rand(vMin, vMax);                          // measured V across shunt
-    const current = vShunt * shuntFactor;                      // I = V × SF
-    const density = current / couponM2;                        // J = I / A
+    const vShunt  = rand(vMin, vMax);
+    const current = vShunt * shuntFactor;
+    const density = current / couponM2;
     return { vShunt, current, density };
   }
 
   // ── Primary pipeline potentials (vs CSE) — NACE SP0169 ──
-  const primaryOffDC = rand(-1.20, -0.85);
-  const primaryOnDC  = primaryOffDC - rand(0.05, 0.25);       // ON more -ve than OFF (IR drop)
-  const primaryOnAC  = rand(0.0, 3.5);                        // NACE SP0177 limit = 4 V
+  // passCriteria=true  → readings within protection limits (OFF DC ≤ -0.85 V)
+  // passCriteria=false → at least one reading deliberately outside limits (exception)
+  let primaryOffDC, primaryOnDC, primaryOnAC;
+  if (passCriteria) {
+    // PASS: fully protected — OFF DC well below -0.85 V
+    primaryOffDC = rand(-1.20, -0.86);
+    primaryOnDC  = primaryOffDC - rand(0.05, 0.25);
+    primaryOnAC  = rand(0.0, 3.0);
+  } else {
+    // FAIL: under-protected — OFF DC above -0.85 V threshold
+    const failType = randInt(0, 2);
+    if (failType === 0) {
+      // Insufficient cathodic protection (OFF DC too positive)
+      primaryOffDC = rand(-0.84, -0.60);
+      primaryOnDC  = primaryOffDC - rand(0.01, 0.10);
+    } else if (failType === 1) {
+      // ON DC also insufficient
+      primaryOffDC = rand(-1.20, -0.86);  // OFF OK
+      primaryOnDC  = rand(-0.84, -0.60);  // ON fails
+    } else {
+      // AC stray current interference exceeds 4 V NACE SP0177 limit
+      primaryOffDC = rand(-1.20, -0.86);
+      primaryOnDC  = primaryOffDC - rand(0.05, 0.25);
+      primaryOnAC  = rand(4.1, 8.0);      // AC violation
+    }
+    if (!primaryOnAC) primaryOnAC = rand(0.0, 3.0);
+  }
 
   // ── Rectifier output ──
   const primaryOutVoltage     = rand(12, 48);
@@ -540,6 +630,40 @@ function getMeasVal(col, readings) {
   return rand(-1,1).toFixed(3);
 }
 
+
+/* Extract measurement column names for the inspection file.
+   STRICTLY derived from Threshold / Threshold Operator columns in the ref file:
+     "Primary P/S ON AC Threshold Operator" → "Primary P/S ON AC"
+     "Primary P/S ON AC Threshold"          → "Primary P/S ON AC"
+   Deduplication ensures each measurement appears only once.
+   No other columns are included. */
+function extractMeasCols(header) {
+  const seen = new Set();
+  const cols = [];
+  (header || []).forEach(col => {
+    if (!col) return;
+    const ct = col.trim();
+    // Strip "Threshold Operator" suffix (more specific — must come first)
+    let base = null;
+    if (/\s+Threshold\s+Operator\s*$/i.test(ct)) {
+      base = ct.replace(/\s+Threshold\s+Operator\s*$/i, '').trim();
+    } else if (/\s+Threshold\s*$/i.test(ct)) {
+      base = ct.replace(/\s+Threshold\s*$/i, '').trim();
+    }
+    if (base && base.length > 0 && !seen.has(base)) {
+      seen.add(base);
+      cols.push(base);
+    }
+  });
+  return cols;
+}
+
+/* Build inspection header from the asset reference header */
+function buildInspHeader(assetHeader) {
+  const measCols = extractMeasCols(assetHeader);
+  return ['Segment*', 'Asset Name*', ...measCols, 'Date of Inspection*', 'Survey Name*', 'Technician', 'Comments'];
+}
+
 /* ═══════════════════════════════════════════════════
    MAP — LEAFLET
 ═══════════════════════════════════════════════════ */
@@ -571,7 +695,7 @@ function destPt(ll, bearing, distKm) {
   const lat1=ll.lat*f, lon1=ll.lng*f;
   const lat2=Math.asin(Math.sin(lat1)*Math.cos(d)+Math.cos(lat1)*Math.sin(d)*Math.cos(bearing));
   const lon2=lon1+Math.atan2(Math.sin(bearing)*Math.sin(d)*Math.cos(lat1),Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
-  return L.latLng(lat2/f, lon2/f);
+  return { lat: lat2/f, lng: lon2/f };  // plain object — no Leaflet dependency
 }
 function bearing(ll1,ll2) {
   const f=Math.PI/180, dL=(ll2.lng-ll1.lng)*f;
@@ -691,8 +815,7 @@ function switchMode(mode) {
   document.getElementById('modeBtn1').classList.toggle('active',mode===1);
   document.getElementById('modeBtn2').classList.toggle('active',mode===2);
   document.getElementById('tabAsset').style.display        = mode===2?'none':'';
-  document.getElementById('downloadLink').style.display    = 'none';
-  document.getElementById('downloadInspLink').style.display= 'none';
+  clearDownloads();
   document.getElementById('statusBar').style.display       = 'none';
   document.getElementById('assetBadge').textContent        = '–';
   document.getElementById('inspBadge').textContent         = '–';
@@ -721,6 +844,119 @@ function downloadXlsx(aoa, sheetName, fileName, linkId) {
   const blob=new Blob([s2ab(out)],{type:'application/octet-stream'});
   const link=document.getElementById(linkId);
   link.href=URL.createObjectURL(blob); link.download=fileName; link.style.display='inline-block';
+}
+
+
+/* ═══════════════════════════════════════════════════
+   CHUNKED DOWNLOAD HELPERS
+   Assets split into 1000-row files.
+   Each chunk's inspection file contains all 10 years
+   of data for that chunk's assets only.
+═══════════════════════════════════════════════════ */
+
+function clearDownloads() {
+  const row = document.getElementById('downloadRow');
+  if (row) row.innerHTML = '';
+  const con = document.getElementById('downloadContainer');
+  if (con) con.style.display = 'none';
+}
+
+async function generateChunkedDownloads(header, assetRows, inspHeader, inspRows, assetType, YEARS, assets) {
+  const assetChunk = parseInt(document.getElementById('assetChunkSel').value) || 0;
+  const inspChunk  = parseInt(document.getElementById('inspChunkSel').value)  || 0;
+
+  // asset chunk size: 0 = all in one file
+  const assetCs    = assetChunk > 0 ? assetChunk : assetRows.length;
+  const totalAssetFiles = Math.ceil(assetRows.length / assetCs);
+
+  const row = document.getElementById('downloadRow');
+  row.innerHTML = '';
+  document.getElementById('downloadContainer').style.display = 'block';
+  const totalAssets = assets.length;
+
+  for (let ac = 0; ac < totalAssetFiles; ac++) {
+    const aStart  = ac * assetCs;
+    const aEnd    = Math.min(aStart + assetCs, assetRows.length);
+    const fileNum = ac + 1;
+    const suffix  = totalAssetFiles > 1 ? `_${fileNum}` : '';
+
+    // ── Asset file for this chunk ────────────────────────────────────────────
+    const assetBlob = xlsxBlob([header, ...assetRows.slice(aStart, aEnd)], 'Assets');
+    const assetLabel = totalAssetFiles > 1
+      ? `⬇ Asset File ${fileNum}/${totalAssetFiles}  (rows ${(aStart+1).toLocaleString()}–${aEnd.toLocaleString()})`
+      : `⬇ Asset Import File  (${assetRows.length.toLocaleString()} assets)`;
+    row.appendChild(makeDownloadLink(assetBlob, `${assetType}_Asset_Import${suffix}.xlsx`, assetLabel, '#27ae60'));
+
+    // ── Inspection rows belonging to this asset chunk ────────────────────────
+    const chunkInspRows = [];
+    for (let yr = 0; yr < YEARS; yr++) {
+      chunkInspRows.push(...inspRows.slice(yr * totalAssets + aStart, yr * totalAssets + aEnd));
+    }
+
+    // ── Split inspection rows further if inspChunk is set ────────────────────
+    const inspCs = inspChunk > 0 ? inspChunk : chunkInspRows.length;
+    const totalInspFiles = Math.ceil(chunkInspRows.length / inspCs);
+
+    for (let ic = 0; ic < totalInspFiles; ic++) {
+      const iStart    = ic * inspCs;
+      const iEnd      = Math.min(iStart + inspCs, chunkInspRows.length);
+      const inspSlice = chunkInspRows.slice(iStart, iEnd);
+      const inspNum   = totalInspFiles > 1 ? ic + 1 : null;
+
+      // Filename: Asset_Import_1_Inspection_1.xlsx or simpler if only 1 of each
+      let inspFileName, inspLabel;
+      if (totalAssetFiles > 1 && totalInspFiles > 1) {
+        inspFileName = `${assetType}_Inspection_Import_${fileNum}_${inspNum}.xlsx`;
+        inspLabel    = `⬇ Inspection File ${fileNum}-${inspNum}  (${inspSlice.length.toLocaleString()} records)`;
+      } else if (totalAssetFiles > 1) {
+        inspFileName = `${assetType}_Inspection_Import_${fileNum}.xlsx`;
+        inspLabel    = `⬇ Inspection File ${fileNum}/${totalAssetFiles}  (${inspSlice.length.toLocaleString()} records)`;
+      } else if (totalInspFiles > 1) {
+        inspFileName = `${assetType}_Inspection_Import_${inspNum}.xlsx`;
+        inspLabel    = `⬇ Inspection File ${inspNum}/${totalInspFiles}  (${inspSlice.length.toLocaleString()} records)`;
+      } else {
+        inspFileName = `${assetType}_Inspection_Import.xlsx`;
+        inspLabel    = `⬇ Inspection Import File  (${inspSlice.length.toLocaleString()} records)`;
+      }
+
+      const inspBlob = xlsxBlob([inspHeader, ...inspSlice], 'Inspections');
+      row.appendChild(makeDownloadLink(inspBlob, inspFileName, inspLabel, '#e67e22'));
+    }
+
+    // Visual divider between asset file groups
+    if (ac < totalAssetFiles - 1) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'width:100%;height:1px;background:#e0e0e0;margin:6px 0;';
+      row.appendChild(sep);
+    }
+
+    showProgress(92 + ((ac+1) / totalAssetFiles) * 7, `Writing file group ${fileNum}/${totalAssetFiles}…`);
+    await yieldUI();
+  }
+}
+
+function xlsxBlob(aoa, sheetName) {
+  const ws     = XLSX.utils.aoa_to_sheet(aoa);
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  Object.keys(ws).forEach(addr => {
+    if (addr[0]==='!') return;
+    const cell = ws[addr];
+    if (cell && dateRe.test(String(cell.v))) { cell.t='s'; cell.v=String(cell.v); delete cell.w; }
+  });
+  const wb  = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const out = XLSX.write(wb, {bookType:'xlsx', type:'binary'});
+  const s2ab = s => { const b=new ArrayBuffer(s.length),v=new Uint8Array(b); for(let i=0;i<s.length;i++) v[i]=s.charCodeAt(i)&0xFF; return b; };
+  return new Blob([s2ab(out)], {type:'application/octet-stream'});
+}
+
+function makeDownloadLink(blob, fileName, label, color) {
+  const a = document.createElement('a');
+  a.href           = URL.createObjectURL(blob);
+  a.download       = fileName;
+  a.textContent    = label;
+  a.style.cssText  = `display:inline-block;padding:8px 13px;background:${color};color:#fff;border-radius:3px;font-size:12px;text-decoration:none;margin:2px 4px 2px 0;`;
+  return a;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -756,10 +992,14 @@ document.getElementById('assetForm').addEventListener('submit', async function(e
 ═══════════════════════════════════════════════════ */
 async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
   try {
-      const today  = new Date();
+      const today   = new Date();
       const lonIdx  = header.findIndex(h=>/Longitude\*/i.test(h));
       const latIdx  = header.findIndex(h=>/Latitude\*/i.test(h));
       const mapIdx  = header.findIndex(h=>/Mapping Asset ID/i.test(h));
+      const segIdx  = header.findIndex(h=>/^Segment\*$/i.test(h ? h.trim() : ''));
+      // Level 3 column = the column immediately before Segment* in the hierarchy
+      // Could be named "Area/Product*", "Region*", "Pipeline*", anything — detect by position
+      const l3ColIdx = segIdx > 0 ? segIdx - 1 : -1;
 
       /* Interpolate points */
       showProgress(2,'Interpolating pipeline points…'); await yieldUI();
@@ -785,7 +1025,7 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
       const FALLBACK_SEGS = [
         { l3Name: null, seg: { name: `Seg- ${creationMonth} 1`, type: 'Mainline' } },
         { l3Name: null, seg: { name: `Seg- ${creationMonth} 2`, type: 'Spur'     } },
-        { l3Name: null, seg: { name: `Seg- ${creationMonth} 3`, type: 'Meter Station' } },
+        { l3Name: null, seg: { name: `Seg- ${creationMonth} 3`, type: 'Mainline' } },
       ];
       const combos = hierCombos || FALLBACK_SEGS;
 
@@ -813,8 +1053,9 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
           const ct = col ? col.trim() : '';
           if (ct==='Stationing')                                return randInt(1,9999);
           if (ct==='Facility Shot #')                           return generateFacilityShot();
-          // Level 3 (first hierarchy column) — use stored value if company active, else fallback
-          if (/Region/i.test(ct))                               return l3Value || ('Region'+(i%3));
+          // Level 3 column detected by position (column just before Segment*)
+          // Works regardless of column name: "Area/Product*", "Region*", etc.
+          if (l3ColIdx !== -1 && ci === l3ColIdx)               return l3Value || '';
           // Segment and Segment Type come from hierarchy (or fallback month-based)
           if (/Segment\*/i.test(ct))                            return segment;
           if (/Segment Type\*/i.test(ct))                       return segType;
@@ -833,7 +1074,7 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
           // Coupon Size (cm²) and Portable Shunt Factor (A/V) — fixed per asset
           if (/Coupon Size/i.test(ct))                         return meta.couponCm2;
           if (/Portable Shunt Factor|Shunt Factor/i.test(ct))  return meta.shuntFactor;
-          if (/Effective Native.*Depol/i.test(ct))             return rand(-0.85,-0.65).toFixed(3);
+          if (/Effective Native.*Depol/i.test(ct))             return rand(-0.90,-0.80).toFixed(3); // Native Depol − threshold ∈ [-0.80,-0.90]
 
           // ── Threshold Operator — must be checked BEFORE generic Operator and before mapIdx ──
           if (/Threshold Operator/i.test(ct)) {
@@ -847,15 +1088,21 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
 
           // ── Threshold value — must be checked BEFORE mapIdx ──
           if (/Threshold/i.test(ct) && !/Operator/i.test(ct)) {
+            // Wall thickness is always a positive physical dimension (mm or inches)
+            if (/Wall.?Thick/i.test(ct))         return rand(3.0, 25.0).toFixed(2);
             if (/OFF.?DC/i.test(ct)) {
-              // Check if the adjacent Threshold Operator col (ci-1) uses polarization shift
+              // If polarization shift operator chosen, threshold is the shift amount
+              // Native Depol − Threshold should land in -0.80 to -0.90 range
+              // ∴ for shift values 0.1/0.2/0.3 → NativeDepol ≈ -0.65 to -0.85
               return polShiftCols.has(ci-1)
                 ? pick(POLSHIFT_THRESHOLDS)        // 0.1, 0.2, 0.3 or -0.850
-                : rand(-1.5,-0.85).toFixed(3);    // realistic OFF DC threshold range
+                : rand(-1.20,-0.85).toFixed(3);   // OFF DC must be ≤ -0.85 (NACE)
             }
-            if (/ON.?DC/i.test(ct))              return rand(-1.8,-0.90).toFixed(3);
-            if (/ON.?AC/i.test(ct))              return rand(0.5, 4.0).toFixed(3);
-            return rand(-1.5,-0.75).toFixed(3);  // generic threshold fallback
+            if (/ON.?DC/i.test(ct))              return rand(-1.50,-0.85).toFixed(3);  // ON DC must be < -0.85
+            if (/ON.?AC/i.test(ct))              return rand(1.0, 4.0).toFixed(3);     // AC: 1–4 V limit
+            if (/Current.?Density/i.test(ct))    return rand(0.01, 0.20).toFixed(4);  // A/m² threshold
+            if (/Resistivity/i.test(ct))         return rand(10, 100).toFixed(1);      // ohm-m
+            return rand(-1.20,-0.85).toFixed(3); // generic potential threshold fallback
           }
 
           // ── Mapping Asset ID neighbours (after threshold checks to avoid collision) ──
@@ -880,9 +1127,16 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
       }
 
       /* ── INSPECTION ROWS ── */
+      // Build inspection header dynamically from the reference file header
+      const inspMeasCols = extractMeasCols(header);
+      const inspHeader   = buildInspHeader(header);
+
       const YEARS=10, surveyDates=buildSurveyDates(YEARS);
       const total=YEARS*assets.length;
       const inspRows=[]; let cnt=0;
+
+      // 50/50 rule: pre-assign each asset as pass (true) or fail (false)
+      const assetPassFlag = assets.map((_,idx) => idx % 2 === 0);
 
       for (let yr=0; yr<YEARS; yr++) {
         const sd=surveyDates[yr];
@@ -890,14 +1144,16 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
         const tech=pick(TECH_NAMES);
         const latest=yr===YEARS-1;
 
-        for (const a of assets) {
+        for (let ai=0; ai<assets.length; ai++) {
+          const a    = assets[ai];
+          const pass = assetPassFlag[ai];
           // Use this asset's fixed coupon size and shunt factor for density calculation
-          const ir = generateCPReadings(a.couponM2, a.shuntFactor);
+          const ir = generateCPReadings(a.couponM2, a.shuntFactor, pass);
           inspRows.push([
             a.segment, a.assetName,
-            ...INSP_MEAS.map(c=>getMeasVal(c, ir)),
+            ...inspMeasCols.map(col=>getMeasVal(col, ir)),
             formatDate(sd), sn, tech,
-            generateInspComment(a.segment,a.assetName,sd.getFullYear(),latest)
+            generateInspComment(a.segment,a.assetName,sd.getFullYear(),latest,pass)
           ]);
           cnt++;
           if(cnt%2000===0){
@@ -909,17 +1165,15 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
 
       showProgress(88,'Building previews…'); await yieldUI();
       showPreviewTable('previewTable',    header,      assetRows.slice(0,10));
-      showPreviewTable('previewInspTable',INSP_HEADER, inspRows.slice(0,10));
+      showPreviewTable('previewInspTable',inspHeader,  inspRows.slice(0,10));
       document.getElementById('assetBadge').textContent=`${assetRows.length.toLocaleString()} assets`;
       document.getElementById('inspBadge').textContent =`${inspRows.length.toLocaleString()} records`;
 
-      showProgress(92,'Writing Asset file…'); await yieldUI();
-      downloadXlsx([header,...assetRows],'Assets',`${assetType}_Asset_Import.xlsx`,'downloadLink');
-      showProgress(97,'Writing Inspection file…'); await yieldUI();
-      downloadXlsx([INSP_HEADER,...inspRows],'Inspections',`${assetType}_Inspection_Import.xlsx`,'downloadInspLink');
+      clearDownloads();
+      showProgress(92,'Writing files…'); await yieldUI();
+      await generateChunkedDownloads(header, assetRows, inspHeader, inspRows, assetType, YEARS, assets);
       showProgress(100,'Done!'); await yieldUI(); hideProgress();
-
-      setStatus(`✅ Generated ${assetRows.length.toLocaleString()} assets and ${inspRows.length.toLocaleString()} inspection records (${YEARS} annual surveys). Latest survey within last 15 months.`);
+      setStatus(`✅ Generated ${assetRows.length.toLocaleString()} assets and ${inspRows.length.toLocaleString()} inspection records (${YEARS} annual surveys). Download links ready below.`);
 
     } catch(err) {
       alert('Error: '+err.message); hideProgress();
@@ -993,9 +1247,16 @@ document.getElementById('inspOnlyForm').addEventListener('submit', async functio
       if(!assets.length) return alert('No asset records found.');
 
       const prefix=assets[0].assetName.split('-')[0]||'Asset';
+      // Build inspection header from the uploaded asset file's header
+      const inspMeasCols2 = extractMeasCols(hdr);
+      const inspHeader2   = buildInspHeader(hdr);
+
       const YEARS=10, surveyDates=buildSurveyDates(YEARS);
       const total=YEARS*assets.length;
       const inspRows=[]; let cnt=0;
+
+      // 50/50 rule: pre-assign each asset as pass or fail
+      const passFlag2 = assets.map((_,idx) => idx % 2 === 0);
 
       showProgress(2,`Generating ${total.toLocaleString()} inspection records…`); await yieldUI();
 
@@ -1005,13 +1266,15 @@ document.getElementById('inspOnlyForm').addEventListener('submit', async functio
         const tech=pick(TECH_NAMES);
         const latest=yr===YEARS-1;
 
-        for(const a of assets){
-          const ir2 = generateCPReadings(a.couponM2, a.shuntFactor);
+        for(let ai=0;ai<assets.length;ai++){
+          const a    = assets[ai];
+          const pass = passFlag2[ai];
+          const ir2  = generateCPReadings(a.couponM2, a.shuntFactor, pass);
           inspRows.push([
             a.segment,a.assetName,
-            ...INSP_MEAS.map(c=>getMeasVal(c, ir2)),
+            ...inspMeasCols2.map(col=>getMeasVal(col, ir2)),
             formatDate(sd),sn,tech,
-            generateInspComment(a.segment,a.assetName,sd.getFullYear(),latest)
+            generateInspComment(a.segment,a.assetName,sd.getFullYear(),latest,pass)
           ]);
           cnt++;
           if(cnt%2000===0){showProgress(2+(cnt/total)*85,`${cnt.toLocaleString()} of ${total.toLocaleString()}…`);await yieldUI();}
@@ -1019,10 +1282,16 @@ document.getElementById('inspOnlyForm').addEventListener('submit', async functio
       }
 
       showProgress(90,'Writing XLSX…'); await yieldUI();
-      showPreviewTable('previewInspTable',INSP_HEADER,inspRows.slice(0,10));
+      showPreviewTable('previewInspTable',inspHeader2,inspRows.slice(0,10));
       document.getElementById('inspBadge').textContent=`${inspRows.length.toLocaleString()} records (${YEARS} yrs × ${assets.length.toLocaleString()} assets)`;
       switchTab('inspection');
-      downloadXlsx([INSP_HEADER,...inspRows],'Inspections',`${prefix}_Inspection_Import.xlsx`,'downloadInspLink');
+      // Mode 2: single inspection file (no asset file being generated, no chunking)
+      clearDownloads();
+      const inspBlob2 = xlsxBlob([inspHeader2,...inspRows],'Inspections');
+      const m2Link = makeDownloadLink(inspBlob2,`${prefix}_Inspection_Import.xlsx`,
+        `⬇ Inspection Import File  (${inspRows.length.toLocaleString()} records)`,'#e67e22');
+      document.getElementById('downloadRow').appendChild(m2Link);
+      document.getElementById('downloadContainer').style.display = 'block';
       showProgress(100,'Done!'); await yieldUI(); hideProgress();
       setStatus(`✅ Generated ${inspRows.length.toLocaleString()} inspection records for ${assets.length.toLocaleString()} assets — ${YEARS} annual surveys, latest within last 15 months.`);
 
@@ -1157,9 +1426,11 @@ function toggleHierPanel() {
   lbl.textContent = body.classList.contains('open') ? '▲ collapse' : '▼ expand';
 }
 function switchHierTab(tab) {
-  ['parse','gist','backup'].forEach(t => {
-    document.getElementById('htab'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('active', t===tab);
-    document.getElementById('htab'+t.charAt(0).toUpperCase()+t.slice(1)+'Panel').style.display = t===tab?'':'none';
+  ['parse','manual','gist','backup'].forEach(t => {
+    const btn   = document.getElementById('htab' + t.charAt(0).toUpperCase() + t.slice(1));
+    const panel = document.getElementById('htab' + t.charAt(0).toUpperCase() + t.slice(1) + 'Panel');
+    if (btn)   btn.classList.toggle('active', t === tab);
+    if (panel) panel.style.display = t === tab ? '' : 'none';
   });
 }
 
@@ -1311,6 +1582,116 @@ window.addEventListener('load', () => {
     if (savedToken) document.getElementById('gistToken').value = savedToken;
   }, 100);
 });
+
+/* ═══════════════════════════════════════════════════
+   MANUAL HIERARCHY ENTRY
+   Build Level3 + Segment rows in the UI, then save
+   them into the same localStorage hierarchy store.
+═══════════════════════════════════════════════════ */
+let manualL3Count = 0;
+
+function addManualL3Block(prefillL3='', prefillSegs=[]) {
+  const container = document.getElementById('manualL3Container');
+  const id = ++manualL3Count;
+
+  const segsHtml = (prefillSegs.length ? prefillSegs : [{name:'',type:'Mainline'}])
+    .map((s,si) => manualSegRowHtml(id, si, s.name, s.type)).join('');
+
+  const block = document.createElement('div');
+  block.className = 'manual-l3-block';
+  block.id = `manualL3Block_${id}`;
+  block.innerHTML = `
+    <button class="manual-rm-l3" onclick="document.getElementById('manualL3Block_${id}').remove()" title="Remove this Level3">✕</button>
+    <div class="manual-l3-header">
+      <label style="font-size:12px;font-weight:bold;white-space:nowrap;margin:0;">Level 3 Value:</label>
+      <input class="manual-l3-name" type="text" id="manualL3Name_${id}" value="${prefillL3}" placeholder="e.g. South-East"/>
+    </div>
+    <div id="manualSegs_${id}">${segsHtml}</div>
+    <button class="manual-add-seg" onclick="addManualSegRow(${id})">＋ Add Segment</button>
+  `;
+  container.appendChild(block);
+}
+
+function manualSegRowHtml(l3id, segIdx, name='', type='Mainline') {
+  const uid = `${l3id}_${segIdx}_${Date.now()}`;
+  return `
+    <div class="manual-seg-row" id="manualSegRow_${uid}">
+      <input class="manual-seg-input" type="text" value="${name}" placeholder="Segment name e.g. Seg- South-East 1"/>
+      <select class="manual-seg-type">
+        <option value="Mainline" ${type==='Mainline'?'selected':''}>Mainline</option>
+        <option value="Spur"     ${type==='Spur'?'selected':''}>Spur</option>
+      </select>
+      <button class="manual-rm-btn" onclick="document.getElementById('manualSegRow_${uid}').remove()" title="Remove">✕</button>
+    </div>`;
+}
+
+function addManualSegRow(l3id) {
+  const segsDiv = document.getElementById(`manualSegs_${l3id}`);
+  const idx     = segsDiv.querySelectorAll('.manual-seg-row').length;
+  const tmp     = document.createElement('div');
+  tmp.innerHTML = manualSegRowHtml(l3id, idx);
+  segsDiv.appendChild(tmp.firstElementChild);
+}
+
+function clearManualForm() {
+  document.getElementById('manualL3Container').innerHTML = '';
+  manualL3Count = 0;
+  document.getElementById('manualStatus').textContent = '';
+}
+
+function setManualStatus(msg, ok=true) {
+  const el = document.getElementById('manualStatus');
+  el.style.color   = ok ? '#27ae60' : '#e74c3c';
+  el.textContent   = msg;
+}
+
+function saveManualHierarchy() {
+  const company = document.getElementById('manualCompanyInput').value.trim();
+  if (!company) { setManualStatus('⚠ Enter a company name first.', false); return; }
+
+  const blocks = document.getElementById('manualL3Container').querySelectorAll('.manual-l3-block');
+  if (!blocks.length) { setManualStatus('⚠ Add at least one Level 3 Value block.', false); return; }
+
+  const stored   = hierLoad();
+  const existing = stored[company] || {};
+  let added = 0, updated = 0, skipped = 0;
+
+  blocks.forEach(block => {
+    const l3Input = block.querySelector('.manual-l3-name');
+    const l3Name  = l3Input ? l3Input.value.trim() : '';
+    if (!l3Name) { skipped++; return; }
+
+    const segRows = block.querySelectorAll('.manual-seg-row');
+    const segments = [];
+    segRows.forEach(row => {
+      const nameIn = row.querySelector('.manual-seg-input');
+      const typeIn = row.querySelector('.manual-seg-type');
+      const n = nameIn ? nameIn.value.trim() : '';
+      const t = typeIn ? typeIn.value : 'Mainline';
+      if (n) segments.push({ name: n, type: t });
+    });
+
+    if (!segments.length) { skipped++; return; }
+
+    if (existing[l3Name]) {
+      // Merge: add only new segment names, keep existing
+      const existingNames = new Set(existing[l3Name].segments.map(s=>s.name));
+      segments.forEach(s => { if (!existingNames.has(s.name)) existing[l3Name].segments.push(s); });
+      updated++;
+    } else {
+      existing[l3Name] = { level1Value: company, level2Value: '', segments };
+      added++;
+    }
+  });
+
+  stored[company] = existing;
+  hierSave(stored);
+  refreshHierUI();
+
+  const msg = `✅ Saved to "${company}". ${added} new Level3 value${added!==1?'s':''} added, ${updated} updated${skipped?' ('+skipped+' blank skipped)':''}.`;
+  setManualStatus(msg);
+}
+
 
 </script>
 </body>
