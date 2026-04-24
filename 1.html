@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Pipeline Asset Import Tool</title>
+<title>CSV Tool</title>
 
 <!-- Leaflet (much lighter than OpenLayers) -->
 <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -995,7 +995,6 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
       const today   = new Date();
       const lonIdx  = header.findIndex(h=>/Longitude\*/i.test(h));
       const latIdx  = header.findIndex(h=>/Latitude\*/i.test(h));
-      const mapIdx  = header.findIndex(h=>/Mapping Asset ID/i.test(h));
       const segIdx  = header.findIndex(h=>/^Segment\*$/i.test(h ? h.trim() : ''));
       // Level 3 column = the column immediately before Segment* in the hierarchy
       // Could be named "Area/Product*", "Region*", "Pipeline*", anything — detect by position
@@ -1076,7 +1075,7 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
           if (/Portable Shunt Factor|Shunt Factor/i.test(ct))  return meta.shuntFactor;
           if (/Effective Native.*Depol/i.test(ct))             return rand(-0.90,-0.80).toFixed(3); // Native Depol − threshold ∈ [-0.80,-0.90]
 
-          // ── Threshold Operator — must be checked BEFORE generic Operator and before mapIdx ──
+          // ── Threshold Operator — must be checked BEFORE generic Operator ──
           if (/Threshold Operator/i.test(ct)) {
             // polarization shift is ONLY assigned when pre-decided via polShiftCols
             // so the threshold column always sees the correct decision at ci-1
@@ -1086,7 +1085,7 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
             return pick(OPERATORS);
           }
 
-          // ── Threshold value — must be checked BEFORE mapIdx ──
+          // ── Threshold value ──
           if (/Threshold/i.test(ct) && !/Operator/i.test(ct)) {
             // Wall thickness is always a positive physical dimension (mm or inches)
             if (/Wall.?Thick/i.test(ct))         return rand(3.0, 25.0).toFixed(2);
@@ -1105,9 +1104,6 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
             return rand(-1.20,-0.85).toFixed(3); // generic potential threshold fallback
           }
 
-          // ── Mapping Asset ID neighbours (after threshold checks to avoid collision) ──
-          if (mapIdx!==-1 && ci===mapIdx+1)                    return i+1;
-          if (mapIdx!==-1 && ci===mapIdx+2)                    return generateAlphanumericName();
 
           // ── Generic Operator (not Threshold Operator) ──
           if (/Operator/i.test(ct))                            return pick(OPERATORS);
