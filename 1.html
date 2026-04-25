@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CSV 2</title>
+<title>CSV Tool</title>
 
 <!-- Leaflet (much lighter than OpenLayers) -->
 <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -114,6 +114,19 @@ th{background:#f0f0f0;}
 .manual-add-seg:hover{background:#2980b9;}
 .manual-rm-l3{position:absolute;top:8px;right:8px;padding:3px 8px;background:#e74c3c;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;}
 .manual-rm-l3:hover{background:#c0392b;}
+
+
+/* Asset Template section within company card */
+.hier-template-section{margin-top:8px;border-top:1px solid #e0e4f0;padding-top:8px;}
+.hier-template-label{font-size:11px;color:#777;font-weight:bold;margin-bottom:4px;}
+.hier-asset-type-row{margin-bottom:6px;}
+.hier-asset-type-name{font-size:12px;color:#2c3e50;font-weight:bold;margin-bottom:3px;}
+.hier-template-radio-row{display:flex;flex-wrap:wrap;gap:5px;margin-left:8px;}
+.hier-template-radio-row label{display:flex;align-items:center;gap:4px;font-size:11px;color:#444;cursor:pointer;background:#f0f4ff;border:1px solid #c8d4f0;border-radius:3px;padding:2px 8px;transition:all .15s;}
+.hier-template-radio-row label:hover{background:#dce8ff;}
+.hier-template-radio-row label.selected{background:#3498db;color:#fff;border-color:#2980b9;}
+.hier-template-radio-row input[type=radio]{display:none;}
+.hier-active-template-badge{display:inline-block;background:#8e44ad;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:6px;}
 
 </style>
 </head>
@@ -392,11 +405,11 @@ function generateSpatialRef(colName, idx, spacingKm) {
   }
   if (/\(km\)/i.test(colName)) {
     const v = idx * spacingKm;
-    return v===0 ? '0' : v.toFixed(3);
+    return v===0 ? '0' : v.toFixed(randInt(1,3));
   }
   if (/\(mi\)/i.test(colName)) {
     const v = idx * spacingKm * 0.621371;
-    return v===0 ? '0' : v.toFixed(3);
+    return v===0 ? '0' : v.toFixed(randInt(1,3));
   }
   return (idx * spacingKm).toFixed(3);
 }
@@ -1105,6 +1118,8 @@ async function generateFromHeader(header, assetType, spacingKm, generateBtn) {
           }
 
 
+          // Asset Template* — fill with active template name if selected
+          if (/Asset Template/i.test(ct))                      return getActiveTemplateName(i);
           // ── Generic Operator (not Threshold Operator) ──
           if (/Operator/i.test(ct))                            return pick(OPERATORS);
           if (/Comments?/i.test(ct))                           return generateAssetComment(segment,assetName);
@@ -1330,7 +1345,8 @@ document.getElementById('inspOnlyForm').addEventListener('submit', async functio
    - New segment under existing l3 → appended
 ═══════════════════════════════════════════════════ */
 const HIER_KEY = 'pipelineHierarchy_v1';
-let activeCompany = null;   // company currently selected for generation
+let activeCompany  = null;   // company currently selected for generation
+let activeTemplate = null;   // { assetType: string, templateNames: string[] } or null
 
 function hierLoad()    { try { return JSON.parse(localStorage.getItem(HIER_KEY)||'{}'); } catch { return {}; } }
 function hierSave(obj) { localStorage.setItem(HIER_KEY, JSON.stringify(obj)); }
@@ -1351,15 +1367,51 @@ function parseAndSaveHierarchy() {
   try { parsed = JSON.parse(raw); }
   catch(e) { hierSetStatus('⚠ Invalid JSON: ' + e.message, false); return; }
 
-  // Support getAllLevel4ValueByPrimaryCompany (primary) and fallback to Level3 for backward compat
-  let items;
+  // Detect which API response was pasted
   const d = parsed.data || {};
+
+  // ── Branch: Asset Type Template API ──────────────────────────────────────
+  if (d.getAssetTypeTemplateByPrimaryCompanyId?.items) {
+    const tplItems = d.getAssetTypeTemplateByPrimaryCompanyId.items;
+    if (!Array.isArray(tplItems) || !tplItems.length) {
+      hierSetStatus('⚠ No items found in getAssetTypeTemplateByPrimaryCompanyId.', false); return;
+    }
+    const stored  = hierLoad();
+    const entry   = stored[company] || {};
+    // Ensure __assetTemplates map exists (separate from l3 keys)
+    const tplMap  = entry.__assetTemplates || {};
+
+    tplItems.forEach(atItem => {
+      const assetType = atItem.assetType;
+      if (!assetType) return;
+      const names = (atItem.assetTypeTemplates || [])
+        .filter(t => !t.isDeleted && t.assetTypeTemplateName)
+        .map(t => t.assetTypeTemplateName);
+      if (!names.length) return;
+      // Merge — keep existing, add new names
+      const existing = new Set(tplMap[assetType] || []);
+      names.forEach(n => existing.add(n));
+      tplMap[assetType] = [...existing];
+    });
+
+    entry.__assetTemplates = tplMap;
+    stored[company] = entry;
+    hierSave(stored);
+    refreshHierUI();
+    const totalTpls = Object.values(tplMap).reduce((s,v)=>s+v.length,0);
+    hierSetStatus(`✅ Saved asset templates for "${company}". ${Object.keys(tplMap).length} asset type(s), ${totalTpls} template name(s) total.`);
+    document.getElementById('hierJsonInput').value = '';
+    return;
+  }
+
+  // ── Branch: Level4 / Level3 hierarchy API ────────────────────────────────
+  let items;
   if (d.getAllLevel4ValueByPrimaryCompany?.items) {
     items = d.getAllLevel4ValueByPrimaryCompany.items;
   } else if (d.getAllLevel3ValueByPrimaryCompany?.items) {
     items = d.getAllLevel3ValueByPrimaryCompany.items;
   } else {
-    hierSetStatus('⚠ Could not find getAllLevel4ValueByPrimaryCompany.items (or Level3) in the JSON.', false);
+    hierSetStatus('⚠ Unrecognised API response. Expected getAllLevel4ValueByPrimaryCompany, getAllLevel3ValueByPrimaryCompany, or getAssetTypeTemplateByPrimaryCompanyId.', false);
     return;
   }
   if (!Array.isArray(items) || items.length === 0) {
@@ -1449,8 +1501,8 @@ function parseAndSaveHierarchy() {
 }
 
 function setActiveCompany(name) {
-  activeCompany = name || null;
-  // Update active badge next to panel title
+  activeCompany  = name || null;
+  activeTemplate = null;   // reset template selection when switching company
   const lbl = document.getElementById('hierActiveLabel');
   lbl.innerHTML = name
     ? `<span class="hier-active-badge">✔ ${name}</span>`
@@ -1496,13 +1548,69 @@ function refreshHierUI() {
   }
 
   list.innerHTML = names.map(name => {
-    const l3Entries = Object.entries(stored[name]);
+    const companyData = stored[name];
+    // L3 entries: all keys except __assetTemplates
+    const l3Entries = Object.entries(companyData).filter(([k]) => k !== '__assetTemplates');
+    const tplMap    = companyData.__assetTemplates || {};
     const isActive  = name === activeCompany;
-    // Each l3Value pill shows its segment names (can repeat across regions — that is valid)
+
     const pillsHTML = l3Entries.map(([l3, data]) => {
       const segs = (data.segments||[]).map(s=>s.name).join(', ');
       return `<span class="hier-l3-pill" title="Segments: ${segs}">${l3}</span>`;
     }).join('');
+
+    // Template section — single-select asset type, multi-select templates within it
+    let tplHTML = '';
+    const assetTypes = Object.keys(tplMap);
+    if (assetTypes.length > 0 && isActive) {
+      // Store tplMap on window so onclick handlers can look up by name safely (no JSON in attributes)
+      window._hierActiveTplMap = tplMap;
+
+      const rows = assetTypes.map(at => {
+        const allNames      = tplMap[at];
+        const isActiveType  = activeTemplate && activeTemplate.assetType === at;
+        const selectedNames = isActiveType ? new Set(activeTemplate.templateNames) : new Set();
+        // Safe key: base64-ish via encodeURIComponent; but simpler — use data-at attr + delegated handler
+        const safeAt = at.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+        // Template pills — only show when this asset type is active
+        const pillsSection = isActiveType ? `
+          <div class="hier-template-radio-row" style="margin-top:4px;">
+            ${allNames.map(tplName => {
+              const sel     = selectedNames.has(tplName);
+              const safeTpl = tplName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+              return `<label class="${sel?'selected':''}" onclick="toggleTemplate('${safeAt}','${safeTpl}')">
+                ${tplName}
+              </label>`;
+            }).join('')}
+          </div>` : '';
+
+        return `<div class="hier-asset-type-row">
+          <div class="hier-asset-type-name" style="cursor:pointer;display:flex;align-items:center;gap:6px;"
+               onclick="selectAssetType('${safeAt}')">
+            <span style="font-size:13px;">${isActiveType ? '▼' : '▶'}</span>
+            <span style="color:${isActiveType?'#2980b9':'#2c3e50'};font-weight:bold;">${at}</span>
+            <span style="font-size:10px;color:#888;">(${allNames.length} template${allNames.length!==1?'s':''})</span>
+            ${isActiveType ? `<span style="font-size:10px;background:#3498db;color:#fff;border-radius:8px;padding:1px 7px;">${selectedNames.size} selected</span>` : ''}
+          </div>
+          ${pillsSection}
+        </div>`;
+      }).join('');
+
+      const activeLabel = activeTemplate
+        ? `<span class="hier-active-template-badge">✔ ${activeTemplate.assetType} (${activeTemplate.templateNames.length})</span>`
+        : '<span style="font-size:11px;color:#888;margin-left:4px;">— none selected</span>';
+
+      tplHTML = `<div class="hier-template-section">
+        <div class="hier-template-label">Asset Template ${activeLabel}</div>
+        <div style="font-size:11px;color:#777;margin-bottom:6px;">Click an asset type to select it and all its templates · Click templates to toggle individually</div>
+        ${rows}
+        <button style="margin-top:5px;padding:3px 10px;border:none;border-radius:3px;background:#e0e0e0;cursor:pointer;font-size:11px;" onclick="selectTemplate(null,null,null)">✕ Clear selection</button>
+      </div>`;
+    } else if (assetTypes.length > 0 && !isActive) {
+      tplHTML = `<div style="font-size:11px;color:#888;margin-top:5px;">${assetTypes.length} asset type(s) with templates — activate company to select.</div>`;
+    }
+
     return `
       <div class="hier-company-card ${isActive?'active':''}">
         <div style="flex:1;min-width:0;">
@@ -1511,6 +1619,7 @@ function refreshHierUI() {
             ${isActive?'<span style="font-size:11px;color:#27ae60;font-weight:normal;margin-left:6px;">● active</span>':''}
           </div>
           <div class="hier-l3-pills" style="margin-top:5px;">${pillsHTML}</div>
+          ${tplHTML}
         </div>
         <div class="hier-company-actions">
           <button class="hier-sm-btn use" onclick="setActiveCompany('${name.replace(/'/g,"\'")}')">
@@ -1522,6 +1631,49 @@ function refreshHierUI() {
   }).join('');
 }
 
+/* Click an asset type header → select that type + ALL its templates */
+function selectAssetType(assetType) {
+  const allNames = (window._hierActiveTplMap || {})[assetType] || [];
+  if (activeTemplate && activeTemplate.assetType === assetType) {
+    // Already active → toggle off
+    activeTemplate = null;
+  } else {
+    activeTemplate = { assetType, templateNames: [...allNames] };
+  }
+  refreshHierUI();
+}
+
+/* Click an individual template pill → toggle within the active asset type */
+function toggleTemplate(assetType, templateName) {
+  const allNames = (window._hierActiveTplMap || {})[assetType] || [];
+  if (!activeTemplate || activeTemplate.assetType !== assetType) {
+    // Switch asset type — start with just this template
+    activeTemplate = { assetType, templateNames: [templateName] };
+  } else {
+    const set = new Set(activeTemplate.templateNames);
+    if (set.has(templateName)) {
+      set.delete(templateName);
+      if (set.size === 0) { activeTemplate = null; }
+      else                { activeTemplate.templateNames = [...set]; }
+    } else {
+      set.add(templateName);
+      activeTemplate.templateNames = [...set];
+    }
+  }
+  refreshHierUI();
+}
+
+/* Called from "Clear" button */
+function selectTemplate(company, assetType, templateName) {
+  if (!company) { activeTemplate = null; refreshHierUI(); }
+}
+
+/* Returns a template name for asset index i (cycles through selected templates) */
+function getActiveTemplateName(i=0) {
+  if (!activeTemplate || !activeTemplate.templateNames.length) return '';
+  return activeTemplate.templateNames[i % activeTemplate.templateNames.length];
+}
+
 /* Build hierarchy context for generation.
    Returns flat array of {l3Name, seg} combos from the active company.
    Segments CAN repeat across different l3Values — this is by design. */
@@ -1530,9 +1682,11 @@ function getHierarchyContext() {
   const stored = hierLoad();
   const data   = stored[activeCompany];
   if (!data) return null;
-  const entries = Object.entries(data);
+  // Exclude __assetTemplates meta key — only return actual l3 entries
+  const entries = Object.entries(data).filter(([k]) => k !== '__assetTemplates');
   return entries.length ? entries : null;
 }
+
 
 /* ── Export / Import ── */
 function hierExportAll() {
