@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CSV Tool</title>
+<title>CSV 2</title>
 
 <!-- Leaflet (much lighter than OpenLayers) -->
 <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -149,7 +149,7 @@ th{background:#f0f0f0;}
           <input class="hier-input" type="text" id="hierCompanyInput" placeholder="e.g. Indian Surveys" style="max-width:260px;"/>
         </div>
         <label style="margin-top:0;font-size:13px;">Paste API Response (JSON):</label>
-        <textarea class="hier-textarea" id="hierJsonInput" placeholder='Paste the getAllLevel3ValueByPrimaryCompany API response here…'></textarea>
+        <textarea class="hier-textarea" id="hierJsonInput" placeholder='Paste the getAllLevel4ValueByPrimaryCompany API response here…'></textarea>
         <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
           <button class="hier-btn parse" onclick="parseAndSaveHierarchy()">⚙ Parse &amp; Save Level 3 Values</button>
           <button class="hier-btn clear" onclick="document.getElementById('hierJsonInput').value=''">✕ Clear</button>
@@ -1319,9 +1319,15 @@ document.getElementById('inspOnlyForm').addEventListener('submit', async functio
      }
    }
    Rules:
-   - level3Values once stored → segments never change
-   - New level3Values from API → new segments generated once at parse time
-   - Existing level3Values → kept exactly as stored (merge, not replace)
+   API: getAllLevel4ValueByPrimaryCompany
+   Each item provides:
+     level3Value  → Level 3 column (first column, e.g. "AL - Decatur")
+     level4Value  → Segment name (Segment* column, e.g. "2022 - 2" N2 Decatur to 3M")
+     segmentType  → Segment Type* column (e.g. "MAINLINE TRUNK")
+   Merge rules:
+   - Existing l3 + segment combo → kept, never overwritten
+   - New l3 → added with its level4/segmentType entries as segments
+   - New segment under existing l3 → appended
 ═══════════════════════════════════════════════════ */
 const HIER_KEY = 'pipelineHierarchy_v1';
 let activeCompany = null;   // company currently selected for generation
@@ -1345,51 +1351,99 @@ function parseAndSaveHierarchy() {
   try { parsed = JSON.parse(raw); }
   catch(e) { hierSetStatus('⚠ Invalid JSON: ' + e.message, false); return; }
 
-  // Navigate the nested response structure
+  // Support getAllLevel4ValueByPrimaryCompany (primary) and fallback to Level3 for backward compat
   let items;
-  try {
-    items = parsed.data.getAllLevel3ValueByPrimaryCompany.items;
-    if (!Array.isArray(items)) throw new Error('items is not an array');
-  } catch {
-    hierSetStatus('⚠ Could not find data.getAllLevel3ValueByPrimaryCompany.items in the JSON.', false);
+  const d = parsed.data || {};
+  if (d.getAllLevel4ValueByPrimaryCompany?.items) {
+    items = d.getAllLevel4ValueByPrimaryCompany.items;
+  } else if (d.getAllLevel3ValueByPrimaryCompany?.items) {
+    items = d.getAllLevel3ValueByPrimaryCompany.items;
+  } else {
+    hierSetStatus('⚠ Could not find getAllLevel4ValueByPrimaryCompany.items (or Level3) in the JSON.', false);
+    return;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    hierSetStatus('⚠ items array is empty or invalid.', false);
     return;
   }
 
   const stored   = hierLoad();
   const existing = stored[company] || {};
-  const today    = new Date();
-  const month    = MONTH_NAMES[today.getMonth()];
 
-  let addedCount = 0, keptCount = 0;
-  items.forEach(item => {
-    const l3 = item.level3Value;
-    if (!l3) return;
-    if (existing[l3]) {
-      // Already stored — keep segments exactly as they are (never regenerate)
-      keptCount++;
-    } else {
-      // New level3Value — generate fixed segments once, now
-      existing[l3] = {
-        level1Value : item.level1Value || '',
-        level2Value : item.level2Value || '',
-        // 3 segments named after their level3 value → unique per level3, never repeated elsewhere
-        segments    : [
-          { name: `Seg- ${l3} 1`, type: 'Mainline' },
-          { name: `Seg- ${l3} 2`, type: 'Spur'     },
-          { name: `Seg- ${l3} 3`, type: 'Mainline' }
-        ]
-      };
-      addedCount++;
-    }
-  });
+  // Determine which API version we got
+  const isLevel4 = !!d.getAllLevel4ValueByPrimaryCompany?.items;
+
+  let newL3Count = 0, newSegCount = 0, keptCount = 0;
+
+  if (isLevel4) {
+    /* ── Level4 API: level3Value + level4Value + segmentType ──────────────────
+       level3Value  → Level 3 column (fills first col in asset file)
+       level4Value  → Segment name  (fills Segment* column)
+       segmentType  → Segment Type  (fills Segment Type* column)
+       Multiple items may share the same level3Value → group them.         */
+    items.forEach(item => {
+      const l3      = item.level3Value;
+      const segName = item.level4Value;
+      const segType = item.segmentType || 'MAINLINE TRUNK';
+      if (!l3 || !segName) return;
+
+      if (!existing[l3]) {
+        // New level3Value — create entry with this first segment
+        existing[l3] = {
+          level1Value : item.level1Value || '',
+          level2Value : item.level2Value || '',
+          segments    : [{ name: segName, type: segType }]
+        };
+        newL3Count++;
+        newSegCount++;
+      } else {
+        // Existing level3Value — check if this specific segment is already stored
+        const already = existing[l3].segments.some(s => s.name === segName);
+        if (!already) {
+          existing[l3].segments.push({ name: segName, type: segType });
+          newSegCount++;
+        } else {
+          keptCount++;
+        }
+      }
+    });
+
+  } else {
+    /* ── Level3 API (backward compat): only level3Value provided ─────────────
+       No segment data in response — generate placeholder segments.         */
+    items.forEach(item => {
+      const l3 = item.level3Value;
+      if (!l3) return;
+      if (existing[l3]) {
+        keptCount++;
+      } else {
+        existing[l3] = {
+          level1Value : item.level1Value || '',
+          level2Value : item.level2Value || '',
+          segments    : [
+            { name: `Seg- ${l3} 1`, type: 'Mainline' },
+            { name: `Seg- ${l3} 2`, type: 'Spur'     },
+            { name: `Seg- ${l3} 3`, type: 'Mainline' }
+          ]
+        };
+        newL3Count++;
+      }
+    });
+  }
 
   stored[company] = existing;
   hierSave(stored);
   refreshHierUI();
 
-  const msg = addedCount > 0
-    ? `✅ Saved. ${addedCount} new level3Value(s) added, ${keptCount} existing kept unchanged.`
-    : `✅ No new level3Values — all ${keptCount} already stored. Segments unchanged.`;
+  let msg;
+  if (isLevel4) {
+    const l3s = Object.keys(existing).length;
+    msg = `✅ Saved. ${newL3Count} new Level3 value${newL3Count!==1?'s':''} added, ${newSegCount} new segment${newSegCount!==1?'s':''} added, ${keptCount} already existed. Total: ${l3s} Level3 values.`;
+  } else {
+    msg = newL3Count > 0
+      ? `✅ Saved. ${newL3Count} new Level3 value(s) added, ${keptCount} existing kept unchanged.`
+      : `✅ No new Level3 values — all ${keptCount} already stored.`;
+  }
   hierSetStatus(msg);
   document.getElementById('hierJsonInput').value = '';
 }
